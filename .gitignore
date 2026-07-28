@@ -1,0 +1,5 @@
+# Kilo skills repo - no code, no binaries
+.DS_Store
+*.swp
+*.swo
+*~
