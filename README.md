@@ -9,10 +9,21 @@ skills/
 ├── shared/          # 所有环境共用的技能（Kilo + Reasonix 都加载）
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
-├── scripts/         # 安装辅助脚本
+├── scripts/         # 工具级安装脚本（不属于任何技能）
 │   ├── install-kilo.sh        # WSL 下将技能链接到 ~/.kilo/skills
 │   └── install-reasonix.sh    # Win 下将技能注册到 ~/.reasonix/config.toml
 └── README.md
+```
+
+**每个技能都是自包含的独立文件夹**。凡是某个技能依赖的脚本，一律放进该技能自己的文件夹内，不散落在仓库根部：
+
+```
+kilo/<技能名>/
+├── SKILL.md            # 技能说明（入口）
+├── scripts/            # 该技能自身依赖的脚本
+│   ├── xxx.sh
+│   └── xxx.py
+└── (其他辅助文件)
 ```
 
 ## 环境安装
@@ -94,4 +105,20 @@ description: <一句话描述>
 - **仅 Kilo (WSL)** → `kilo/<技能名>/SKILL.md`
 - **仅 Reasonix (Win)** → `reasonix/<技能名>/SKILL.md`
 
-提交后，各环境重新运行对应的安装脚本即可生效。
+### 技能自身依赖的脚本
+
+若某技能需要脚本才能工作（例如打包、解析、自动生成），把脚本放在该技能文件夹内的 `scripts/` 子目录，与 `SKILL.md` 同级：
+
+```
+<技能名>/
+├── SKILL.md
+└── scripts/
+    ├── build.sh
+    └── parse.py
+```
+
+> **注意**：仓库根 `scripts/` 只放安装/工具级脚本，不要放某个技能专属的脚本。
+
+### 生效方式
+
+提交后，各环境重新运行对应的安装脚本即可生效。若技能文件夹带 `scripts/`，安装脚本仍只链接技能目录本身，技能内的子目录会随技能目录一起生效，无需额外配置。
