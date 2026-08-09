@@ -78,7 +78,10 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 ### 共享技能（`shared/`）
 
-> 暂无，待添加。如果某个技能同时适用于 Kilo 和 Reasonix，请放在此目录。
+| 名称 | 说明 |
+|------|------|
+| `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱 |
+
 
 ## 添加新技能
 
