@@ -18,6 +18,27 @@ description: STA 固件大小版本自动编译打包技能。针对任意 DI_QU
 | `sta/Makefile` | 构建入口（`make` 必须在 `sta/` 目录下运行） |
 | `sta/make/scripts/bin2dat.sh` | 从编译后的二进制提取版本信息，自动生成所有输出文件名并打包 zip |
 
+## 前置：确定编译目标 (TARGET)
+
+**必须确认用户想要编译的平台目标**，不同目标对应不同的 make target 和输出路径。以下为常见 target（以 `sta/Makefile` 为准）：
+
+| 目标类型 | make target | 说明 |
+|---|---|---|
+| STA v2 | `sta_venus2m` | venus2m v2 平台 |
+| STA v7 | `sta_venus2m_v7` | venus2m v7 平台 (默认常用) |
+| STA v7 HRF | `sta_venus2m_v7_hrf` | v7 HRF 版本 |
+| II采 | `clt2_venus2m` / `clt2_venus2m_v7` | v2/v7 II采 |
+| 中继器 | `rpter_venus2m` / `rpter_venus2m_v7` | v2/v7 中继器 |
+| 山西量测 | `sta_venus2m_shanxi_liang_ce` | 山西量测单元 |
+| 组合构建 | `sta` / `clt2` / `rpter` / `venus2m` / `venus2m_v7` | 批量构建一组目标 |
+
+选定 TARGET 后，以下所有目录名、路径、make 命令均以 `{TARGET}` 代替。  
+
+例如 TARGET=`sta_venus2m`：
+- 输出目录：`sta/firmware/sta_venus2m/`
+- 归档目录：`archive_sta_venus2m/`
+- make 命令：`make sta_venus2m jump -j8`
+
 ## 操作前准备
 
 1. 读取当前基线值（不同地区值不同）：
@@ -46,8 +67,8 @@ description: STA 固件大小版本自动编译打包技能。针对任意 DI_QU
 
 ```bash
 # 删除上一次的归档目录和最终 zip，避免新旧文件混合
-rm -rf archive_sta_venus2m_v7
-rm -f *_firmware_v7_*.zip
+rm -rf archive_{TARGET}
+rm -f *_{TARGET}_*.zip
 
 # 删除构建输出（但 make clean 也会做）
 rm -rf sta/firmware
@@ -65,17 +86,17 @@ cp sta/protocol/aps/diqu_conf.h sta/protocol/aps/yxsm_conf.h /tmp/sta-orig-bak/
 
 ```bash
 # 在 sta/ 目录下编译
-cd sta && make clean && make sta_venus2m_v7 jump -j8 && cd ..
+cd sta && make clean && make {TARGET} jump -j8 && cd ..
 ```
 
-归档输出（`make` 的输出在 `sta/firmware/` 下）：
+归档输出（`make` 的输出在 `sta/firmware/{TARGET}/` 下）：
 
 ```bash
-mkdir -p archive_sta_venus2m_v7/baseline
-cp sta/firmware/sta_venus2m_v7/*.bin sta/firmware/sta_venus2m_v7/*.dat \
-   sta/firmware/sta_venus2m_v7/*.zip sta/firmware/sta_venus2m_v7/readme.txt \
-   archive_sta_venus2m_v7/baseline/
-cp -r sta/firmware/sta_venus2m_v7/debug archive_sta_venus2m_v7/baseline/debug
+mkdir -p archive_{TARGET}/baseline
+cp sta/firmware/{TARGET}/*.bin sta/firmware/{TARGET}/*.dat \
+   sta/firmware/{TARGET}/*.zip sta/firmware/{TARGET}/readme.txt \
+   archive_{TARGET}/baseline/
+cp -r sta/firmware/{TARGET}/debug archive_{TARGET}/baseline/debug
 ```
 
 ### 大同小异（改小版本）
@@ -87,14 +108,14 @@ cp -r sta/firmware/sta_venus2m_v7/debug archive_sta_venus2m_v7/baseline/debug
 #    INTERNAL_VER_DATE_Y/M/D → 今日日期
 
 # 2. 编译（在 sta/ 目录下）
-cd sta && make clean && make sta_venus2m_v7 jump -j8 && cd ..
+cd sta && make clean && make {TARGET} jump -j8 && cd ..
 
 # 3. 归档
-mkdir -p archive_sta_venus2m_v7/datong_xiaoyi
-cp sta/firmware/sta_venus2m_v7/*.bin sta/firmware/sta_venus2m_v7/*.dat \
-   sta/firmware/sta_venus2m_v7/*.zip sta/firmware/sta_venus2m_v7/readme.txt \
-   archive_sta_venus2m_v7/datong_xiaoyi/
-cp -r sta/firmware/sta_venus2m_v7/debug archive_sta_venus2m_v7/datong_xiaoyi/debug
+mkdir -p archive_{TARGET}/datong_xiaoyi
+cp sta/firmware/{TARGET}/*.bin sta/firmware/{TARGET}/*.dat \
+   sta/firmware/{TARGET}/*.zip sta/firmware/{TARGET}/readme.txt \
+   archive_{TARGET}/datong_xiaoyi/
+cp -r sta/firmware/{TARGET}/debug archive_{TARGET}/datong_xiaoyi/debug
 
 # 4. 恢复 diqu_conf.h
 cp /tmp/sta-orig-bak/diqu_conf.h sta/protocol/aps/diqu_conf.h
@@ -109,14 +130,14 @@ cp /tmp/sta-orig-bak/diqu_conf.h sta/protocol/aps/diqu_conf.h
 #    VERSION_DATE_Y/M/D → 今日日期
 
 # 2. 编译（在 sta/ 目录下）
-cd sta && make clean && make sta_venus2m_v7 jump -j8 && cd ..
+cd sta && make clean && make {TARGET} jump -j8 && cd ..
 
 # 3. 归档
-mkdir -p archive_sta_venus2m_v7/xiaotong_dayi
-cp sta/firmware/sta_venus2m_v7/*.bin sta/firmware/sta_venus2m_v7/*.dat \
-   sta/firmware/sta_venus2m_v7/*.zip sta/firmware/sta_venus2m_v7/readme.txt \
-   archive_sta_venus2m_v7/xiaotong_dayi/
-cp -r sta/firmware/sta_venus2m_v7/debug archive_sta_venus2m_v7/xiaotong_dayi/debug
+mkdir -p archive_{TARGET}/xiaotong_dayi
+cp sta/firmware/{TARGET}/*.bin sta/firmware/{TARGET}/*.dat \
+   sta/firmware/{TARGET}/*.zip sta/firmware/{TARGET}/readme.txt \
+   archive_{TARGET}/xiaotong_dayi/
+cp -r sta/firmware/{TARGET}/debug archive_{TARGET}/xiaotong_dayi/debug
 
 # 4. 恢复 yxsm_conf.h
 cp /tmp/sta-orig-bak/yxsm_conf.h sta/protocol/aps/yxsm_conf.h
@@ -131,28 +152,28 @@ cp /tmp/sta-orig-bak/yxsm_conf.h sta/protocol/aps/yxsm_conf.h
 ```bash
 # 清理子目录，只保留 zip 文件
 for dir in baseline datong_xiaoyi xiaotong_dayi; do
-  rm -f archive_sta_venus2m_v7/$dir/*.bin \
-        archive_sta_venus2m_v7/$dir/*.dat \
-        archive_sta_venus2m_v7/$dir/readme.txt
-  rm -rf archive_sta_venus2m_v7/$dir/debug
+  rm -f archive_{TARGET}/$dir/*.bin \
+        archive_{TARGET}/$dir/*.dat \
+        archive_{TARGET}/$dir/readme.txt
+  rm -rf archive_{TARGET}/$dir/debug
 done
 
 # 创建根目录 readme.txt（包含版本对照说明）
-cat > archive_sta_venus2m_v7/readme.txt << 'EOF'
+cat > archive_{TARGET}/readme.txt << 'EOF'
 填写版本对照说明...
 区名映射: XX=地区 (例如 HN=湖南, AH=安徽, HB=湖北)
 文件名: {区名}-{批次}-STA-sv{SVERSION}-{日期}-isv{FC_SVERSION}-idate{INTERNAL_VER_DATE}-1.zip
 EOF
 
 # 打成最终 zip（用 ASCII 文件名避免中文编码问题）
-rm -f XXXX_STA_firmware_v7_XXXX.zip
-cd archive_sta_venus2m_v7 && zip -r ../XXXX_STA_firmware_v7_XXXX.zip . && cd ..
+rm -f {TARGET}_firmware.zip
+cd archive_{TARGET} && zip -r ../{TARGET}_firmware.zip . && cd ..
 ```
 
 ### 最终结构
 
 ```
-archive_sta_venus2m_v7/
+archive_{TARGET}/
 ├── readme.txt
 ├── baseline/
 │   └── {地区}-{批次}-STA-sv{SVERSION}-{VERSION_DATE}-isv{FC_SVERSION}-idate{INTERNAL_VER_DATE}-1.zip
@@ -166,9 +187,9 @@ archive_sta_venus2m_v7/
 
 1. **`make` 必须在 `sta/` 目录下运行** — Makefile 中所有相对路径基于 `sta/`。`make clean` 会删除 `sta/firmware/*`，不是项目根目录的 `firmware/`。
 
-2. **固件输出在 `sta/firmware/sta_venus2m_v7/`** — 不是 `firmware/sta_venus2m_v7/`。所有归档的 `cp` 源路径必须为 `sta/firmware/sta_venus2m_v7/...`。
+2. **固件输出在 `sta/firmware/{TARGET}/`** — 不是 `firmware/{TARGET}/`。所有归档的 `cp` 源路径必须为 `sta/firmware/{TARGET}/...`。
 
-3. **`make clean` 会执行 `$(RM) firmware/*`** — 清除所有子目录。归档必须放在 `firmware/` **之外**（如项目根目录的 `archive_sta_venus2m_v7/`）。
+3. **`make clean` 会执行 `$(RM) firmware/*`** — 清除所有子目录。归档必须放在 `firmware/` **之外**（如项目根目录的 `archive_{TARGET}/`）。
 
 4. **`$(RM) $(PRJ_BIN_DIR)/*` 在每个 ELF 链接规则前执行** — 输出目录在每次构建开始时被清空。**每次 `make` 完成后立即拷贝输出文件到归档目录。**
 
@@ -178,11 +199,13 @@ archive_sta_venus2m_v7/
 
 7. **版本号格式**：
    - `FC_SVERSION` 由 `diqu_conf.h` 中宏计算：`(DI_QU_MODE<<16) | (PLATFORM<<12) | (FC_VERSION_L&0xfff)`
-   - 例如湖南 `DI_QU_MODE=0x19`、`VENUS_V7(PLATFORM=1)` → `FC_SVERSION` 格式 `0x191xxx`
+   - `PLATFORM` 在 `VENUS_V7` 定义为 `1`，`VENUS_V2` 定义为 `0`
    - zip 命名规则（来自 `bin2dat.sh:330`）：`{地区UTF8}-{批次}-STA-sv{mSVer}-{date}-isv{内部版本}-idate{内部日期}-1.zip`
 
-8. **`jump` 参数必须作为第二个参数传入** — 如 `make sta_venus2m_v7 jump -j8`，否则 `bin2dat.sh` 会在 stdin 等待用户输入。
+8. **`jump` 参数必须作为第二个参数传入** — 如 `make {TARGET} jump -j8`，否则 `bin2dat.sh` 会在 stdin 等待用户输入。
 
 9. **备份-修改-恢复模式** — 每步修改前确保有原始备份（`/tmp/sta-orig-bak/`），修改后编译归档，立即恢复原始值，确保步间互不影响。
 
-10. **zip 文件名中文乱码** — `bin2dat.sh` 以地区中文名命名 zip（如 `湖南-...zip`），在非中文终端下会显示为乱码。最终交付的 zip 应用 ASCII 缩写（`HN`/`AH`/`HB` 等）重命名子 zip，或直接写 readme 说明映射关系。
+10. **zip 文件名中文乱码** — `bin2dat.sh` 以地区中文名命名 zip（如 `湖南-...zip`），在非中文终端下会显示为乱码。最终交付的 zip 应用 ASCII 缩写（`CQ`/`AH`/`HB` 等）重命名子 zip，或直接写 readme 说明映射关系。
+
+11. **TARGET 变更时全路径同步** — 更换 TARGET 时，必须同步修改：make 命令、固件输出路径、归档目录名、cp 源路径、最终 zip 名，所有出现 `{TARGET}` 处都要保持一致。

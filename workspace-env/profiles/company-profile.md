@@ -20,18 +20,21 @@ reasoning_language = "zh-CN"
 
 ## 领域常量参考
 
-> 以下常量可能需要根据公司环境设置，具体值见 [company-office.md](../company-office.md)。
+> 以下常量对应公司环境实际值，详见 [company-office.md](../company-office.md)。
 
-| 常量 | 说明 |
+| 常量 | 值 / 说明 |
 |------|------|
-| WSL 发行版 | <!-- 待填 --> |
-| Linux 工作根目录 | <!-- 待填 --> |
-| Windows 工作根目录 | <!-- 待填 --> |
-| COM 口 / 硬件路径 | <!-- 待填（如有） --> |
-| 固件路径 | <!-- 待填（如有） --> |
-| 代理配置 | <!-- 待填（如有） --> |
+| WSL 发行版 | Ubuntu 22.04.5 LTS（WSL2） |
+| Linux 工作根目录 | `/home`（STA: `/home/H_STA/04/sta`；CCO: `/home/H_CCO/001/cco`） |
+| SPLC 闭环工具 | `/home/kilo/edbg_pc_debug_tool_full_source`（`python3 -m edbg_pc.cli loop ...`） |
+| 证据目录 | `/d/sta/<project>/`、`/d/cco/<project>/` |
+| 编码规范 | `/home/rule/project-index/cco/coding-standards.mdc` |
+| Windows 工作根目录 | `D:\`（WSL 挂载 `/mnt/d`） |
+| COM 口 / 硬件路径 | 串口按次枚举 + 用户确认（CH341/CP210x），不写死 |
+| 固件路径 | `/home/H_STA/04/sta/firmware/`、`/home/H_CCO/001/cco/firmware/` |
+| 代理配置 | 按实际填写（如有） |
 
 ## 备注
 
-- 加载方式整体方案**待定**，此处仅为配置参考草稿
+- 串口端口每次现场枚举 + 用户确认，不信任历史 readme 的 port 字段直接烧录
 - 具体常量值优先记录在 `company-office.md`，避免与流程混淆（遵循跨会话知识分离原则）

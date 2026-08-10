@@ -16,9 +16,11 @@
 
 ## 加载方式
 
-> ⚠️ **状态：待定** —— 具体切换/加载方案后续再定。
+> ⚠️ **当前实际环境**：本机为**公司办公环境（WSL2 + Windows 双环境）**，当前会话运行在 WSL（Ubuntu 22.04）侧的 Kilo 中。
 
-候选方案（按 Reasonix 的 profile/config 机制组织，见 `profiles/`）：
+公司环境已按 `company-office.md` 与 `profiles/company-profile.md` 填写实际常量；`home-office.md` 仍为待填模板，供家里纯 Windows 环境参考。
+
+加载方式候选方案（按 Reasonix 的 profile/config 机制组织，见 `profiles/`）：
 
 1. **Reasonix 项目级配置**：每个环境可维护一份 `reasonix.toml`，通过 `reasonix --dir <环境根目录>` 加载。
 2. **profile 参考文档**：`profiles/` 下为每个环境准备一份 agent 配置参考，说明该环境需要哪些 provider / 权限 / 常量。

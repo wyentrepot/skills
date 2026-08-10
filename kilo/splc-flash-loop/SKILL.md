@@ -12,13 +12,26 @@ description: 构建、烧录并验证 SPLC STA/CCO V2 固件，使用现有 EDBG
 在 WSL 中使用现有运行时：
 
 ```bash
-cd /home/splc_tool/splc-tools/edbg_pc_debug_tool_full_source
+cd /home/kilo/edbg_pc_debug_tool_full_source
 python3 -m edbg_pc.cli loop --help
 ```
 
 除非用户明确要求修改工具本身，否则不得复制或修改该目录内的运行时代码。
 
 构建、Unity 和长时间串口输出必须重定向到所选工程的 `/d/...` 证据目录，不要把完整日志载入 AI 上下文，也不要使用 `tee`。成功时只返回退出码、耗时、必要结果字段、产物及证据路径；失败时只展开首个根因附近的有限上下文（默认最多 80 行、每行最多 500 字符）。Unity 只汇报总数、最终摘要、失败用例名和有限断言；不得加载逐项成功输出或完整串口日志。已成功的操作不得为报告而重复执行。
+
+### CLI 输出结构与字段提取（必读）
+
+- `loop build`/`flash`/`test-run` 的 JSON 汇总字段（`ok`、`version`、`diqu`、`verification.*`、`updated_readme`、证据路径）打印在标准输出**开头**，其后才跟串口日志行；证据文件（`/d/.../flash-<port>-<timestamp>`、`splc-<port>-<timestamp>`）只保存串口日志，**不含** JSON 汇总字段。
+- 禁止用 `tail`/`head`/`sed -n` 等管道截断这些命令的输出——会丢弃开头的 JSON 汇总。也不要为重新抓取字段而重跑已成功的 build/flash。
+- 需要结构化字段时，把当次输出重定向到 `/tmp/kilo/` 下的临时文件，再只提取汇总字段：
+
+  ```bash
+  python3 -m edbg_pc.cli loop flash --profile cco-hunan --port COM25 > /tmp/kilo/flash-cco-hunan.json 2>&1
+  grep -E '"ok"|"version"|"diqu"|"kind"|verification|latest_firmware|updated_readme' /tmp/kilo/flash-cco-hunan.json
+  ```
+
+  或从证据文件的串口日志提取 `sversion`/`diqu name` 等文本。退出码与退出状态仍以命令本身为准，重定向不影响。
 
 ## 安全约束
 
@@ -156,6 +169,18 @@ python3 -m edbg_pc.cli loop capture --port <CONFIRMED_PORT> --seconds 90 --outpu
 ## CCO 传输约束
 
 `cco-hunan` 使用 1024-byte X-Modem 包，全程 115200，并在下载前由 profile 发送 `setmode 0`。不要套用 STA 的 128-byte/460800 流程，也不要把某个历史 bootloader 版本写成固定前置条件。兼容性警告可以在后续下载和应用验证成功时记录为 warning；下载失败时只诊断，不自动重试。
+
+### CCO 波特率提升可行性（2026-08-04 实机探测结论，11+ 次实验）
+
+CCO bootloader（Unicorn Bootloader，venus8m）有 `config` 目录和 `setbaudrate` 命令，但实测结论：
+
+- **460800 不可行（直接或两级切换均失败）**：
+  - 115200→460800：回显 `baudrate:   460800` 但实际从不切换（460800 下零响应，板卡始终在 115200）。
+  - 115200→230400→460800 两级切换：Hop B 从未成功（多轮实验全部失败）。
+- **230400 切换本身不可靠**：约 10% 成功率（11+ 次实验中仅 1-2 次真正切换），多数情况 `setbaudrate 230400` 完整回显 `baudrate:   230400` + 提示符但 UART 实际未切换；且 230400 链路上出现字节乱码。疑似 venus8m bootloader 的 setbaudrate 实现不稳定 + COM25 CH341 适配器高速率边缘。
+- **结论**：CCO 烧录维持 115200 全程。不要尝试 460800 或 230400 提速，不要相信"先切 230400 再切 460800"的说法（该说法来自 STA venus2m 流程或运行时通用注释，对 CCO venus8m 不成立）。
+- 若确实需要提速，方向是：查 venus8m bootloader setbaudrate 源码或更换适配器（STA 的 CP210x 如 COM4/COM24 比 CH341 更可靠），而不是直接改 profile 波特率。
+- 探测恢复方法：若板卡停留在 config/非 115200 状态，从实际波特率发 `exit` → `[root /]#` → `reboot` → 本地切 115200 等 `See OS run`/`[node /]$`；找不到提示符时可尝试 DTR/RTS 翻转复位。实测证据见 `/d/cco/001-cco/20260804-141500-baud-probe/` 与 `/d/cco/001-cco/20260804-143000-baud-two-step/`。
 
 ## 最终报告
 
