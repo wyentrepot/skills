@@ -74,13 +74,27 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 ### Reasonix 技能（`reasonix/`）
 
-> 暂无，待添加。
+> Superpowers 软件工程方法论（由 obra/superpowers 移植到 Reasonix，MIT 许可）。
+
+| 名称 | 说明 |
+|------|------|
+| `superpowers-brainstorming` | 构思功能/新点子 → 先出批准的设计再写代码 |
+| `superpowers-writing-plans` | 多步骤任务先写计划 |
+| `superpowers-executing-plans` | 带检查点逐步执行计划 |
+| `superpowers-test-driven-development` | 写代码前先写失败测试（RED-GREEN-REFACTOR） |
+| `superpowers-systematic-debugging` | 遇到 bug/测试失败，从证据出发调查 |
+| `superpowers-verification-before-completion` | 说"完成/修复/通过"前先出示证据 |
+| `superpowers-finishing-a-development-branch` | 分支收尾：merge / PR / 清理 |
+| `superpowers-receiving-code-review` | 收到 review 反馈后逐条核验 |
+| `superpowers-using-git-worktrees` | 需要隔离工作空间时 |
+| `superpowers-writing-skills` | 编写/测试 Reasonix skill |
+| `superpowers-sync-upstream` | 同步上游 obra/superpowers 更新 |
 
 ### 共享技能（`shared/`）
 
 | 名称 | 说明 |
 |------|------|
-| `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱 |
+| `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱（含 DECISIONS.md 决策记录） |
 
 
 ## 添加新技能
