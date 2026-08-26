@@ -68,6 +68,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 |------|------|
 | `cco-coding-standards` | CCO/STA 嵌入式 C/C++ 编码规范（142 条规则） |
 | `cco-loghooks-scan` | CCO 固件日志打印扫描 → 结构化清单，供 loghooks 规则作数据源（只读采集不改码） |
+| `observe-workbench-logs` | ZZT_SELF 工作台日志/帧的硬件非侵入、有界 AI 取证 |
 | `splc-flash-loop` | 固件编译→烧录→验证闭环 |
 | `sta-version-build` | STA 固件大小版本自动编译打包 |
 | `sta-version-diff` | 版本差异分析文档生成 |
