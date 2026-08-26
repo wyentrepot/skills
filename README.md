@@ -91,6 +91,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `superpowers-using-git-worktrees` | 需要隔离工作空间时 |
 | `superpowers-writing-skills` | 编写/测试 Reasonix skill |
 | `superpowers-sync-upstream` | 同步上游 obra/superpowers 更新 |
+| `opencode-mcp` | Reasonix → OpenCode MCP 桥：把编码/探索/审查任务委托给 WSL 内 OpenCode 的 zen-* agent 执行（含可用模型与派发规则，详见 docs/opencode-mcp-reasonix.md） |
 
 ### 共享技能（`shared/`）
 
