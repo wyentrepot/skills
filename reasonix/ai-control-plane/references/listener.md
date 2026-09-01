@@ -94,3 +94,17 @@ curl "http://127.0.0.1:8790/api/ai/v1/listener/minute-periods?task_no=1&cco_tei=
 
 - 响应 `{"periods":[{period_start, period_end, report_count, reports[]}]}`；
   每 report 含 `freeze_time` / `freeze_ok` / `response_result` —— 权威口径直接可用。
+
+## 解析后端（local / remote / none，REQS-0019）
+
+侦听台深度解析按三档降级：
+
+- `local`：WSL 本机 net8.0 DLL 解析；
+- `remote`：委托 **Windows 解析网关**（`172.25.0.1:8700`，net48 DLL）；
+- `none`：无解析后端——帧照常采集入库 / 可查，但**深度解析字段不可用**。
+
+- **查档位**：`GET http://127.0.0.1:8765/api/version` → `parse_backend`（及 `dll_available`）。
+- `none` 时 `/api/parse`（8765）返回 503，不影响串口采集与日志索引。
+- **起网关**（Windows 侧，需人在 Windows 执行）：桌面 `wsl环境部署.bat` → [4] 启动 / [5] 停止；
+  或 `powershell -File uart-map.ps1 -Action start-gateway`（详见 `tools/scripts/README.md`）。
+- **排查提示**：帧缺协议明细时先看 `parse_backend`；`none` → 先起网关再继续，别怀疑数据/链路。

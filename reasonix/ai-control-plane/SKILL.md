@@ -4,7 +4,7 @@ description: Control real hardware (HPLC meter-reading workbench) over HTTP as a
 argument-hint: "[task, e.g. 监控cco日志直到出现XX / 向sta发送... / 烧录固件 / 跑验证用例]"
 metadata:
   author: reasonix
-  version: "2.0.0"
+  version: "2.1.0"
   applies-to: D:/2-侦听台改造
 ---
 
@@ -40,6 +40,9 @@ reference，用完即止——不要执行全流程。**（v2.0.0 起按需加�
   `GET /api/ai/v1/operations/{id}/wait?timeout_seconds≤30` 轮询到终态。
 - 错误码：401 token 缺失/失效；403 越权/固件目录外/非本机发授权；404 资源不存在；
   **409 资源冲突（串口占用/会话冲突）不是故障**；422 参数非法；503 后端不可用/未配置。
+- 侦听台深度解析三档 `parse_backend`（local/remote/none，REQS-0019）：`none` 时帧仍可查
+  但无深度字段，先起 Windows 解析网关（桌面 `wsl环境部署.bat` → [4]，或
+  `powershell -File uart-map.ps1 -Action start-gateway`；详见 references/listener.md）。
 
 ## 红线（行为边界）
 
