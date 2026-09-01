@@ -80,3 +80,17 @@ sqlite3 .build_plain/apps/listener/runtime/indexes/idx-*.sqlite3 \
   "SELECT time_seconds/120000 AS bucket_2min, COUNT(DISTINCT station_key) AS sta_cnt
    FROM minute_reports GROUP BY bucket_2min;"
 ```
+
+## 分钟采集分桶查询接口（REQS-0018，scope=evidence:read，API 优先）
+
+> 与页面**同一方法**（`list_task_minute_periods`），口径零分叉；缺报判定走它，
+> 不必手写 SQL。缺服务 503、非法参数 422。
+
+```bash
+curl "http://127.0.0.1:8790/api/ai/v1/listener/minute-periods?task_no=1&cco_tei=001" \
+  -H "Authorization: Bearer <token>"
+# 可选：period_minutes（1–1440）、nid、start_time/end_time（HH:MM:SS）
+```
+
+- 响应 `{"periods":[{period_start, period_end, report_count, reports[]}]}`；
+  每 report 含 `freeze_time` / `freeze_ok` / `response_result` —— 权威口径直接可用。

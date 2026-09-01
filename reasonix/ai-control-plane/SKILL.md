@@ -25,7 +25,7 @@ reference，用完即止——不要执行全流程。**（v2.0.0 起按需加�
 | 烧录固件 | `flash-operations` → `wait` | references/module-serial.md |
 | 验证用例 / 单步 / 查帧 | `simcon/verify·step` → `frames` | references/simcon.md |
 | 查已解析帧 / 追踪一轮业务 | `listener/indexes…/frames`、`listener/traces` | references/listener.md |
-| 离线数据排查 / 漏点定位 | 离线直查 sqlite/日志 → CCO↔索引 双端交叉验证（组合场景，读 3 个） | references/offline-analysis.md（+ cco-log.md + listener.md） |
+| 离线数据排查 / 漏点定位 | **API 优先**：`listener/minute-periods` + `simcon/store/events|snapshots`；原始日志/CCO grep 才离线直查（组合场景，读 3 个） | references/offline-analysis.md（+ cco-log.md + listener.md） |
 | 跑场景全链路 | `POST /api/run` → 轮询 → report | references/helpers.md |
 | 查协议语义 / 构帧预检 | `/api/dict`、`/api/simcon/build` | references/helpers.md |
 | 拿 token / 管授权 | `admin/grants`（**人来做**） | references/auth.md |

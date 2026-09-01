@@ -54,3 +54,26 @@ curl "http://127.0.0.1:8790/api/ai/v1/simcon/frames?updown=up&afn=06" \
 - `GET /api/ai/v1/simcon/session`：当前/最近会话信息。
 - `POST /api/ai/v1/simcon/open`（body 可省略，自动选串口）、`POST /api/ai/v1/simcon/close`：
   显式管理；close 释放串口，日志保留可查。
+
+## 1376.2 收发库只读查询（REQS-0018，scope=simcon:read）
+
+> 持久化库 `data/listener_13762.sqlite`（frame_log/report_event/query_snapshot）的结构化查询。
+> 全部只读 GET；库未启用返回 503。
+
+```bash
+# 06H 主动上报事件历史（report_event）
+curl "http://127.0.0.1:8790/api/ai/v1/simcon/store/events?limit=50" \
+  -H "Authorization: Bearer <token>"
+
+# 下发查询快照列表（query_snapshot，可 afn/fn 过滤）
+curl "http://127.0.0.1:8790/api/ai/v1/simcon/store/snapshots?afn=10&fn=F2&limit=20" \
+  -H "Authorization: Bearer <token>"
+
+# 快照明细行（query_snapshot_item；不存在的快照返回空 items）
+curl "http://127.0.0.1:8790/api/ai/v1/simcon/store/snapshots/1" \
+  -H "Authorization: Bearer <token>"
+```
+
+- 响应信封 `{"items":[...]}`；用于排查 06H 上报是否落库、下发查询结果快照。
+- 与 `/simcon/frames`（会话帧日志 sc-*.jsonl，实时）互补：store 是**持久化库**，
+  跨会话保留（按天滚动 5 天），frames 是本次会话的帧序列。

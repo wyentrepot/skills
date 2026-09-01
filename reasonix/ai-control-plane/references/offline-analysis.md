@@ -4,6 +4,12 @@
 > 完整实战案例见 `使用经验/安徽分钟采集漏点排查.md`；分桶口径见 `listener.md`「分钟采集分析分桶口径」；
 > CCO 帧特征见 `cco-log.md`。
 
+> **⚠ API 优先（REQS-0018 起）**：结构化库查询（分钟分桶 / 06H 上报历史 / 查询快照）
+> 优先走控制面接口 —— `GET /api/ai/v1/listener/minute-periods`（scope evidence:read）、
+> `GET /api/ai/v1/simcon/store/events|snapshots[/{id}]`（scope simcon:read），见
+> `listener.md` / `simcon.md`。**本文件的离线直查仅用于：① 原始日志 / CCO grep；② API 之外的
+> 临时自定义 SQL 核对**（此时注意 `time_seconds` 是毫秒、`freeze_time` 格式等坑）。
+
 ## 0. 排查前置：先确认采集链路在线
 
 **任何「某时段缺数据」结论之前，先确认该时段采集链路在线**，否则可能把「链路断线无数据」误判成「漏报/丢帧」。
