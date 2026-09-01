@@ -13,6 +13,8 @@ metadata:
 驱动真机工作台（8790）的 HTTP 控制面。**按任务走最小路径：先查下表，只读对应的那一个
 reference，用完即止——不要执行全流程。**（v2.0.0 起按需加载：本文件只做路由，
 八步细节在各 references/*.md；完整手册 `docs/16-AI操作指南.md`。）
+**例外**：下表「离线数据排查 / 漏点定位」是组合场景，允许一次读
+`offline-analysis.md` + `cco-log.md` + `listener.md` 三个 reference（多端交叉验证需要）。
 
 ## 任务 → 最小路径速查
 
@@ -23,6 +25,7 @@ reference，用完即止——不要执行全流程。**（v2.0.0 起按需加�
 | 烧录固件 | `flash-operations` → `wait` | references/module-serial.md |
 | 验证用例 / 单步 / 查帧 | `simcon/verify·step` → `frames` | references/simcon.md |
 | 查已解析帧 / 追踪一轮业务 | `listener/indexes…/frames`、`listener/traces` | references/listener.md |
+| 离线数据排查 / 漏点定位 | 离线直查 sqlite/日志 → CCO↔索引 双端交叉验证（组合场景，读 3 个） | references/offline-analysis.md（+ cco-log.md + listener.md） |
 | 跑场景全链路 | `POST /api/run` → 轮询 → report | references/helpers.md |
 | 查协议语义 / 构帧预检 | `/api/dict`、`/api/simcon/build` | references/helpers.md |
 | 拿 token / 管授权 | `admin/grants`（**人来做**） | references/auth.md |
