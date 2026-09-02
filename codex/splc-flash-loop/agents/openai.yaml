@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPLC STA/CCO Firmware Loop"
+  short_description: "Build, flash, and verify SPLC V2 firmware"
+  default_prompt: "Use $splc-flash-loop to safely build, flash, and verify the selected SPLC firmware target."

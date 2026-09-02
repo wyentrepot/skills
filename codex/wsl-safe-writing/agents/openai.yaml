@@ -1,0 +1,4 @@
+interface:
+  display_name: "WSL 安全写入"
+  short_description: "安全修改 WSL 文件，避免 Windows 加密污染"
+  default_prompt: "使用 $wsl-safe-writing 安全修改 WSL 原生文件并在 WSL 内验证。"

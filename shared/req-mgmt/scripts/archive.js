@@ -42,7 +42,7 @@ function parseRecords(content) {
   return records;
 }
 
-// 从记录行中提取单个字段（日期）
+// 从记录行中提取单个字段
 function fieldValue(record, key) {
   const prefix = `- **${key}**:`;
   const line = record.lines.find((l) => l.includes(prefix));
@@ -60,7 +60,7 @@ function readOrFail() {
 function headerBlock() {
   return `# DECISIONS.md — 需求/进度管理技能（req-mgmt）
 
-> 本文件遵循「决策只追加、不覆盖」的 ADR 模式（见 AGENTS.md）。已有记录永不修改；新决策取代旧记录时，只在活动决策表把旧记录状态改为「❌ 已取代」，正文不动。累计满 ${LIMIT} 条 ADR（含已被取代的）时归档重启（见 SKILL.md 流程 G），本文件历史完整保存在 archives/。
+> 本文件遵循「决策只追加、不覆盖」的 ADR 模式（见本技能的 SKILL.md）。已有记录永不修改；新决策取代旧记录时，只在活动决策表把旧记录状态改为「❌ 已取代」，正文不动。累计满 ${LIMIT} 条 ADR（含已被取代的）时归档重启（见 SKILL.md 流程 G），本文件历史完整保存在 archives/。
 
 ---
 
@@ -74,12 +74,14 @@ function headerBlock() {
 function buildNewDecisions(seedRecords) {
   let out = headerBlock();
   seedRecords.forEach((r, i) => {
-    out += `| ${i + 1} | ${r.title} | ${fieldValue(r, '日期')} | ✅ 生效 |\n`;
+    const status = fieldValue(r, '状态') || '⚠️ 未标注';
+    out += `| ${i + 1} | ${r.title} | ${fieldValue(r, '日期')} | ${status} |\n`;
   });
   out += `\n---\n\n## 逐条记录\n\n`;
   seedRecords.forEach((r, i) => {
     const body = r.lines.slice(1).join('\n').trim();
-    out += `### #${i + 1} ${r.title}\n${body}\n\n`;
+    const sourceNote = `- **缓存来源**: 上一生命周期原 #${r.num}（正文中的原编号引用以归档文件为准）`;
+    out += `### #${i + 1} ${r.title}\n${sourceNote}\n${body}\n\n`;
   });
   return out;
 }
@@ -106,7 +108,7 @@ if (!apply) {
   console.log(`  1) 移入 archives/${archiveName}`);
   console.log(`  2) 新建 DECISIONS.md：复制末尾 ${CACHE} 条 (${seeds.map((r) => '#' + r.num).join(', ')}) 重排为新文件的 #1-#${CACHE} 缓存种子`);
   console.log(`  3) 其余 ${count - CACHE} 条仅留在归档中；之后新增从 #${CACHE + 1} 起`);
-  console.log(`确认后运行: node ${path.join('scripts', 'archive.js')} --apply`);
+  console.log(`无需人工确认，继续运行: node ${path.join('scripts', 'archive.js')} --apply`);
   process.exit(0);
 }
 

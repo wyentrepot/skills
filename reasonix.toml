@@ -1,0 +1,23 @@
+# Reasonix project-scope configuration.
+# Resolution order: flag > ./reasonix.toml > ~/.reasonix/config.toml > built-in defaults.
+# 本文件仅对本仓库（/home/02-skill-fc/skills）内的 Reasonix 会话生效。
+
+[skills]
+# 精确列出本仓库 shared/ 与 reasonix/ 下的技能目录（不含 README、不含 opencode-mcp）
+paths = [
+    "shared/req-mgmt",
+    "reasonix/superpowers-brainstorming",
+    "reasonix/superpowers-executing-plans",
+    "reasonix/superpowers-finishing-a-development-branch",
+    "reasonix/superpowers-receiving-code-review",
+    "reasonix/superpowers-sync-upstream",
+    "reasonix/superpowers-systematic-debugging",
+    "reasonix/superpowers-test-driven-development",
+    "reasonix/superpowers-using-git-worktrees",
+    "reasonix/superpowers-verification-before-completion",
+    "reasonix/superpowers-writing-plans",
+    "reasonix/superpowers-writing-skills",
+    "reasonix/ai-control-plane",
+]
+# 防御性排除：即使路径被改回父目录，opencode-mcp 也不加载
+disabled_skills = ["opencode-mcp"]

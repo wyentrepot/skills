@@ -1,0 +1,4 @@
+interface:
+  display_name: "嵌入式 C 编码规范"
+  short_description: "根据代码修改范围按需加载并执行内部嵌入式 C 编码规范规则"
+  default_prompt: "使用 $coding-standards 按任务范围加载相关规范模块并审查或修改嵌入式 C 代码。"
