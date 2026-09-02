@@ -1,14 +1,14 @@
 // req-mgmt DECISIONS.md 归档重启脚本
 // 规则（DECISIONS.md #5 / SKILL.md 流程 G）：
 //   - ADR 记录（### #N 条目，含已被取代的）累计达到 LIMIT=10 条时触发归档重启。
-//   - 归档：当前 DECISIONS.md 整份移入 archives/DECISIONS-YYYYMMDD-HHmm.md（全量历史保留）。
+//   - 归档：当前 DECISIONS.md 整份移入 archives/DECISIONS-YYYYMMDD-HHmmss.md（全量历史保留）。
 //   - 重启（3 缓存 + 7 新增，防失忆）：新文件复制当前文件的末尾 3 条（#8/#9/#10）
 //     依次重排为新文件的 #1/#2/#3，之后新增从 #4 起；每个生命周期 = 3 条缓存 + 最多 7 条新增。
 //
 // 用法:
 //   node archive.js            # dry-run：打印当前条数与是否需归档（不改文件）
 //   node archive.js --apply    # 实际执行归档重启（当前条数 >= 10 才动）
-// 退出码: 0=成功/无需归档, 1=失败（如未达上限时用 --apply）
+// 退出码: 0=成功/无需归档（含未达上限时用 --apply）, 1=失败
 const fs = require('fs');
 const path = require('path');
 
@@ -21,7 +21,7 @@ const archivesDir = path.join(skillRoot, 'archives');
 function pad(n) { return String(n).padStart(2, '0'); }
 function timestamp() {
   const d = new Date();
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
 }
 
 // 解析 DECISIONS.md 中全部 ### #N 记录块
@@ -42,11 +42,14 @@ function parseRecords(content) {
   return records;
 }
 
-// 从记录行中提取单个字段
+// 从记录行中提取单个字段（冒号兼容全角：/半角 :，格式稍异也不静默返回空）
 function fieldValue(record, key) {
-  const prefix = `- **${key}**:`;
-  const line = record.lines.find((l) => l.includes(prefix));
-  return line ? line.split(prefix)[1].trim() : '';
+  const re = new RegExp(`- \\*\\*${key}\\*\\*\\s*[:：]`);
+  const line = record.lines.find((l) => re.test(l));
+  if (!line) return '';
+  const idx = line.indexOf('**' + key + '**');
+  const body = line.slice(idx + ('**' + key + '**').length);
+  return body.replace(/^\s*[:：]\s*/, '').trim();
 }
 
 function readOrFail() {
