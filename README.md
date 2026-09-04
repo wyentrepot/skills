@@ -98,6 +98,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | 名称 | 说明 |
 |------|------|
 | `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱（含 DECISIONS.md 决策记录） |
+| `archify` | 从代码库或自然语言描述生成可验证的交互式架构图（architecture / workflow / sequence / dataflow / lifecycle 五类），自包含 HTML，支持 PNG/SVG/WebM 导出与架构差异对比（Architecture Delta） |
 
 
 ## 添加新技能
