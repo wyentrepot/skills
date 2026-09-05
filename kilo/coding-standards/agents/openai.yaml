@@ -1,0 +1,4 @@
+interface:
+  display_name: "嵌入式 C 编码规范"
+  short_description: "按内部编码规范和现有 C89/C99 风格审查修改嵌入式 C 代码"
+  default_prompt: "使用 $coding-standards 按项目现有 C89/C99 风格和内部编码规范审查并修改嵌入式 C 代码。"

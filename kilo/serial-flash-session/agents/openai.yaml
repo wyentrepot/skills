@@ -1,0 +1,4 @@
+interface:
+  display_name: "串口监控 + XMODEM 烧录一体化"
+  short_description: "编排 ZZT_SELF 模块日志/烧录串口：实时监控 + 同串口 XMODEM 烧录不打断监控"
+  default_prompt: "使用 $serial-flash-session 处理 SPLC 模块串口实时监控与 XMODEM 烧录任务（复用 ZZT_SELF ModuleSerialService API）。"

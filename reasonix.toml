@@ -1,23 +1,2 @@
-# Reasonix project-scope configuration.
-# Resolution order: flag > ./reasonix.toml > ~/.reasonix/config.toml > built-in defaults.
-# 本文件仅对本仓库（/home/02-skill-fc/skills）内的 Reasonix 会话生效。
-
-[skills]
-# 精确列出本仓库 shared/ 与 reasonix/ 下的技能目录（不含 README、不含 opencode-mcp）
-paths = [
-    "shared/req-mgmt",
-    "reasonix/superpowers-brainstorming",
-    "reasonix/superpowers-executing-plans",
-    "reasonix/superpowers-finishing-a-development-branch",
-    "reasonix/superpowers-receiving-code-review",
-    "reasonix/superpowers-sync-upstream",
-    "reasonix/superpowers-systematic-debugging",
-    "reasonix/superpowers-test-driven-development",
-    "reasonix/superpowers-using-git-worktrees",
-    "reasonix/superpowers-verification-before-completion",
-    "reasonix/superpowers-writing-plans",
-    "reasonix/superpowers-writing-skills",
-    "reasonix/ai-control-plane",
-]
-# 防御性排除：即使路径被改回父目录，opencode-mcp 也不加载
-disabled_skills = ["opencode-mcp"]
+[permissions]
+allow = ["Bash=Write-Output '=== config.toml ==='; if (Test-Path \"$env:APPDATA\\reasonix\\config.toml\") { Get-Content \"$env:APPDATA\\reasonix\\config.toml\" } else { Write-Output 'not found' }", "Bash=$dst='\\\\wsl.localhost\\Ubuntu-22.04\\home\\02-skill-fc\\wy-skill\\skills\\reasonix'; Write-Output '=== 工作区 reasonix/ 18 个技能目录 ==='; Get-ChildItem $dst -Directory | Select-Object -ExpandProperty Name | Sort-Object", "Bash=Write-Output '=== Windows 全局 skills 目录当前内容（确认是否仍在被扫描）==='; Get-ChildItem \"$env:APPDATA\\reasonix\\skills\" -Directory | Select-Object -ExpandProperty Name | Sort-Object; Write-Output ''; Write-Output '=== 全局目录里每个是否在加载清单中出现（裸名）==='; $loaded = @('brainstorming','coding-standards','dispatching-parallel-agents','executing-plans','finishing-a-development-branch','flash-cco','opencode-mcp','receiving-code-review','req-mgmt','requesting-code-review','subagent-driven-development','systematic-debugging','test-driven-development','using-git-worktrees','using-superpowers','verification-before-completion','writing-plans','writing-skills','splc-flash-loop'); Get-ChildItem \"$env:APPDATA\\reasonix\\skills\" -Directory | ForEach-Object { $name=$_.Name; $in = if ($name -in $loaded) { 'LOADED(裸名)' } else { 'not-loaded' }; \"{0,-40} {1}\" -f $name, $in }", "Bash=$g = \"$env:APPDATA\\reasonix\\skills\"; $backup = \"$env:APPDATA\\reasonix\\skills-backup-migrated\"; if (-not (Test-Path $backup)) { New-Item -ItemType Directory -Path $backup -Force | Out-Null }; $toMove = @('brainstorming','coding-standards','dispatching-parallel-agents','executing-plans','finishing-a-development-branch','opencode-mcp','receiving-code-review','req-mgmt','requesting-code-review','subagent-driven-development','systematic-debugging','test-driven-development','using-git-worktrees','using-superpowers','verification-before-completion','writing-plans','writing-skills'); foreach ($n in $toMove) { $src = Join-Path $g $n; if (Test-Path $src) { Move-Item -Path $src -Destination (Join-Path $backup $n) -Force; Write-Output \"MOVED: $n -> backup\" } else { Write-Output \"NOT FOUND: $n\" } }", "Bash=Write-Output '=== 清理后的 Windows 全局 skills 目录 ==='; Get-ChildItem \"$env:APPDATA\\reasonix\\skills\" -Directory | Select-Object -ExpandProperty Name; Write-Output ''; Write-Output '=== 备份目录内容（17个）==='; (Get-ChildItem \"$env:APPDATA\\reasonix\\skills-backup-migrated\" -Directory | Select-Object -ExpandProperty Name).Count; Get-ChildItem \"$env:APPDATA\\reasonix\\skills-backup-migrated\" -Directory | Select-Object -ExpandProperty Name | Sort-Object", "Bash=$ws='\\\\wsl.localhost\\Ubuntu-22.04\\home\\02-skill-fc\\wy-skill\\skills'; Write-Output '=== 工作区技能 vs 当前加载清单 一致性 ==='; Write-Output 'reasonix/ 技能:'; Get-ChildItem \"$ws\\reasonix\" -Directory | Select-Object -ExpandProperty Name | Sort-Object; Write-Output ''; Write-Output 'shared/ 技能:'; Get-ChildItem \"$ws\\shared\" -Directory | Select-Object -ExpandProperty Name; Write-Output ''; Write-Output '=== 每个 reasonix 技能是否有 SKILL.md ==='; $missing = @(); Get-ChildItem \"$ws\\reasonix\" -Directory | ForEach-Object { if (-not (Test-Path (Join-Path $_.FullName 'SKILL.md'))) { $missing += $_.Name } }; if ($missing.Count -eq 0) { Write-Output '全部有 SKILL.md ✓' } else { Write-Output \"缺失: $missing\" }; if (-not (Test-Path \"$ws\\shared\\req-mgmt\\SKILL.md\")) { Write-Output 'shared/req-mgmt 缺 SKILL.md!' } else { Write-Output 'shared/req-mgmt 有 SKILL.md ✓' }"]

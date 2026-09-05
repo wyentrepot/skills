@@ -1,0 +1,7 @@
+interface:
+  display_name: "XMODEM Module Flash"
+  short_description: "Flash module firmware over a selected serial COM port."
+  default_prompt: "Use $xmodem-module-flash to flash this module firmware and prompt me to choose the COM port."
+
+policy:
+  allow_implicit_invocation: true

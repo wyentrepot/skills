@@ -1,0 +1,4 @@
+interface:
+  display_name: "Parasoft C/C++"
+  short_description: "Parasoft C/C++ scanning and safe repair rules"
+  default_prompt: "Use $parasoft-cpp to review and safely repair this C/C++ code for Parasoft compliance."
