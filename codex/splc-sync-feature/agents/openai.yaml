@@ -1,4 +1,4 @@
 interface:
-  display_name: "SPLC Ë«¹¤³Ì¹¦ÄÜÍ¬²½"
-  short_description: "Í¬²½ĞŞ¸Ä STA ¹Ì¼şÓëÉÏÎ»»úÅäÖÃ¹¤¾ßÖĞµÄÍ¬Ò»¹¦ÄÜ"
+  display_name: "SPLC åŒå·¥ç¨‹åŠŸèƒ½åŒæ­¥"
+  short_description: "åŒæ­¥ä¿®æ”¹ STA å›ºä»¶ä¸ä¸Šä½æœºé…ç½®å·¥å…·ä¸­çš„åŒä¸€åŠŸèƒ½"
   default_prompt: "Use $splc-sync-feature to implement a named feature consistently across the STA firmware and upper-host configuration tool."

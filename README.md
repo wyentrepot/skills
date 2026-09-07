@@ -1,6 +1,6 @@
 # Skills
 
-**wyentrepot 的个人技能仓库** — 统一管理所有 AI 助手（Kilo / Reasonix / Claude Code 等）的 skills。
+**wyentrepot 的个人技能仓库** — 统一管理所有 AI 助手（Kilo / Reasonix / DeepSeek Harness / Claude Code 等）的 skills。
 
 ## 目录结构
 
@@ -9,9 +9,11 @@ skills/
 ├── shared/          # 所有环境共用的技能（Kilo + Reasonix 都加载）
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
+├── dsh/             # 仅 DeepSeek Harness (DSH) 使用的技能（superpowers-dsh 移植包）
 ├── scripts/         # 工具级安装脚本（不属于任何技能）
 │   ├── install-kilo.sh        # WSL 下将技能链接到 ~/.kilo/skills
-│   └── install-reasonix.sh    # Win 下将技能注册到 ~/.reasonix/config.toml
+│   ├── install-reasonix.sh    # Win 下将技能注册到 ~/.reasonix/config.toml
+│   └── install-dsh.sh         # 将 dsh/ 技能复制到 $DSH_HOME/skills（DSH 用户技能根）
 └── README.md
 ```
 
@@ -60,6 +62,12 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 同上，skills 仓库 clone 到个人电脑，运行 `install-reasonix.sh` 即可。
 
+### 个人办公 — Windows (DeepSeek Harness)
+
+同上，skills 仓库 clone 到个人电脑，运行 `scripts/install-dsh.sh` 即可（将 `dsh/` 下的 superpowers-dsh 技能复制到 `$DSH_HOME/skills`，DSH 下一会话自动加载）。
+
+> DSH 技能发现根：用户 `<DSH_HOME>/skills`、项目 `<项目根>/.dsh/skills`。若不用脚本，也可手动把 `dsh/*` 复制到 `<DSH_HOME>/skills/`。注意：公司 DLP 环境下请用 WSL 或 DSH 自身进程写入，避免把 git checkout 到 NTFS 后被 E-SafeNet 透明加密，导致 DSH 无法读取。
+
 ## 技能列表
 
 ### Kilo 技能（`kilo/`）
@@ -91,9 +99,32 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `superpowers-using-git-worktrees` | 需要隔离工作空间时 |
 | `superpowers-writing-skills` | 编写/测试 Reasonix skill |
 | `superpowers-sync-upstream` | 同步上游 obra/superpowers 更新 |
+| `ai-control-plane` | AI 控制面：通过 HTTP 驱动真机 HPLC 抄表工作台（8790 `/api/ai/v1`）——串口会话（cco/sta）、固件烧录、日志观察/取证、帧查询、场景编排（源自 ZZT_SELF `.agents/skills/ai-control-plane`，v2.0.0） |
 | `opencode-mcp` | Reasonix → OpenCode MCP 桥：把编码/探索/审查任务委托给 WSL 内 OpenCode 的 zen-* agent 执行（含可用模型与派发规则，详见 docs/opencode-mcp-reasonix.md） |
 
-### 共享技能（`shared/`）
+
+### DSH 技能（`dsh/`）
+
+> superpowers-dsh 软件工程方法论（由 obra/superpowers 移植到 DeepSeek Harness，移植源 [LayneChai/superpowers-dsh](https://github.com/LayneChai/superpowers-dsh)，MIT 许可）。
+
+| 名称 | 说明 |
+|------|------|
+| `using-superpowers` | 入口技能：如何查找与使用技能 |
+| `brainstorming` | 构思功能/新点子 → 先出批准的设计再写代码 |
+| `writing-plans` | 多步骤任务先写计划 |
+| `executing-plans` | 带检查点逐步执行计划 |
+| `subagent-driven-development` | 每任务派发全新子代理并评审 |
+| `dispatching-parallel-agents` | 独立工作扇出到并行代理 |
+| `systematic-debugging` | 遇到 bug/测试失败，从证据出发调查 |
+| `test-driven-development` | 写代码前先写失败测试（RED-GREEN-REFACTOR） |
+| `verification-before-completion` | 说"完成/修复/通过"前先出示证据 |
+| `requesting-code-review` | 合并前获得严格评审 |
+| `receiving-code-review` | 收到 review 反馈后逐条核验 |
+| `finishing-a-development-branch` | 分支收尾：merge / PR / 清理 |
+| `using-git-worktrees` | 需要隔离工作空间时 |
+| `writing-skills` | 编写/测试 DSH skill |
+
+### 共享技能（shared/）
 
 | 名称 | 说明 |
 |------|------|
