@@ -78,7 +78,6 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `cco-loghooks-scan` | CCO 固件日志打印扫描 → 结构化清单，供 loghooks 规则作数据源（只读采集不改码） |
 | `observe-workbench-logs` | ZZT_SELF 工作台日志/帧的硬件非侵入、有界 AI 取证 |
 | `splc-flash-loop` | 固件编译→烧录→验证闭环 |
-| `sta-version-build` | STA 固件大小版本自动编译打包 |
 | `sta-version-diff` | 版本差异分析文档生成 |
 | `sta-test-build` | STA Unity 单元测试模式编译打包 |
 
@@ -130,6 +129,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱（含 DECISIONS.md 决策记录） |
 | `archify` | 从代码库或自然语言描述生成可验证的交互式架构图（architecture / workflow / sequence / dataflow / lifecycle 五类），自包含 HTML，支持 PNG/SVG/WebM 导出与架构差异对比（Architecture Delta） |
 | `ai-control-plane` | AI 控制面：通过 HTTP 驱动真机 HPLC 抄表工作台（8790 `/api/ai/v1`）——串口会话（cco/sta）、固件烧录、日志观察/取证、帧查询、场景编排（源自 ZZT_SELF `.agents/skills/ai-control-plane`，v2.1.0） |
+| `sta-version-build` | STA 固件大小版本自动编译打包（基线 / 大同小异 / 小同大异三组变体编译并归档 zip） |
 
 
 ## 添加新技能

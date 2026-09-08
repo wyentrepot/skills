@@ -7,6 +7,7 @@
 paths = [
     "shared/req-mgmt",
     "shared/ai-control-plane",
+    "shared/sta-version-build",
     "reasonix/superpowers-brainstorming",
     "reasonix/superpowers-executing-plans",
     "reasonix/superpowers-finishing-a-development-branch",
@@ -21,3 +22,6 @@ paths = [
 ]
 # 防御性排除：即使路径被改回父目录，opencode-mcp 也不加载
 disabled_skills = ["opencode-mcp"]
+
+[permissions]
+allow = ["Bash=ls -la ~ && echo \"---HOME---\" && echo $HOME && echo \"---reasonix dirs---\" && ls -la ~/.reasonix 2>/dev/null; ls -la ~/.config/reasonix 2>/dev/null; find / -maxdepth 4 -name \"*.toml\" -path \"*reasonix*\" 2>/dev/null | head -20"]
