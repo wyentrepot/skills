@@ -10,14 +10,16 @@ const path = require('path');
 const skillRoot = path.resolve(__dirname, '..');
 
 const files = [
-  ['SKILL.md', ['name: req-mgmt', '多需求切换', '开发前对齐', '只追加，不覆盖', '归档重启']],
+  ['SKILL.md', ['name: req-mgmt', '多需求切换', '开发前对齐', '只追加，不覆盖', 'writing-plans', 'PLAN.md', '归档重启']],
   ['DECISIONS.md', ['## 活动决策表', '只追加', '满 10 条', '归档重启']],
   ['examples/README.md', ['在隔离临时 git 仓库实测通过']],
-  ['templates/REQS-INDEX.md', ['需求索引']],
+  ['templates/REQS-INDEX.md', ['需求索引', 'PLAN.md']],
   ['templates/reqs/0001-slug/REQS.md', ['变更记录（只追加，禁止覆盖）']],
-  ['templates/reqs/0001-slug/TODO.md', ['## 阶段 1']],
+  ['templates/reqs/0001-slug/PLAN.md', ['writing-plans', '依据需求基线版本', '执行步骤']],
+  ['templates/reqs/0001-slug/TODO.md', ['## 阶段 1', '交付', 'PLAN.md']],
   ['templates/reqs/0001-slug/DONE.md', ['完成日志']],
   ['scripts/archive.js', ['LIMIT = 10', 'CACHE = 3', 'archives', '--apply', 'slice(-CACHE)']],
+  ['tests/plan-source-contract.test.js', ['plan-source contract', 'PLAN.md']],
 ];
 
 let pass = true;
