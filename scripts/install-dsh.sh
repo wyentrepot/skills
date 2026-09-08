@@ -11,7 +11,7 @@
 #      DSH_HOME="C:/Users/xxx/AppData/Roaming/dsh-desktop/harness" bash .../install-dsh.sh
 #
 # 作用：
-#   将 dsh/ 和 shared/ 下的所有技能目录复制到 <DSH_HOME>/skills/（DSH 用户技能根）。
+#   递归发现 dsh/ 和 shared/ 下的所有技能目录，并复制到 <DSH_HOME>/skills/（DSH 用户技能根）。
 #   DSH 实时监视该目录，安装后无需重启即可在下一会话看到这些技能。
 #
 # 注意（公司 DLP 环境）：
@@ -59,15 +59,23 @@ mkdir -p "$DST_DIR"
 
 COPIED=0
 SKIPPED=0
+declare -A SELECTED_SOURCES=()
 for src_dir in "${SOURCE_DIRS[@]}"; do
     if [ ! -d "$src_dir" ]; then
         echo "  [跳过] 源目录不存在: $src_dir"
         continue
     fi
-    for skill_dir in "$src_dir"/*/; do
-        [ -d "$skill_dir" ] || continue
+    while IFS= read -r -d '' skill_file; do
+        skill_dir="$(dirname "$skill_file")"
         skill_name="$(basename "$skill_dir")"
         target="$DST_DIR/$skill_name"
+
+        if [ -n "${SELECTED_SOURCES[$skill_name]:-}" ] && [ "${SELECTED_SOURCES[$skill_name]}" != "$src_dir" ]; then
+            echo "  [跳过] 同名技能由较高优先级目录提供: $skill_name"
+            SKIPPED=$((SKIPPED + 1))
+            continue
+        fi
+        SELECTED_SOURCES[$skill_name]="$src_dir"
 
         if [ -d "$target" ] && [ -f "$target/SKILL.md" ]; then
             # 已安装：用 diff 判断是否一致
@@ -82,7 +90,7 @@ for src_dir in "${SOURCE_DIRS[@]}"; do
         fi
         cp -r "$skill_dir" "$target"
         COPIED=$((COPIED + 1))
-    done
+    done < <(find "$src_dir" -type f -name SKILL.md -print0 | sort -z)
 done
 
 echo ""

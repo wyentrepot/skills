@@ -6,7 +6,12 @@
 
 ```
 skills/
-├── shared/          # 所有环境共用的技能（Kilo + Reasonix + DSH 都加载）
+├── shared/          # 所有环境共用的技能，按能力域分组
+│   ├── development-process/              # 需求、设计与实施计划
+│   ├── code-quality/                     # 测试与编码规范
+│   ├── hardware-in-the-loop/             # 实机控制、烧录和构建闭环
+│   └── research-and-technical-expression/ # 架构与技术表达
+├── codex/           # 仅 Codex 使用的专属技能
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
 ├── dsh/             # 仅 DeepSeek Harness (DSH) 使用的技能（superpowers-dsh 移植包）
@@ -20,7 +25,7 @@ skills/
 **每个技能都是自包含的独立文件夹**。凡是某个技能依赖的脚本，一律放进该技能自己的文件夹内，不散落在仓库根部：
 
 ```
-kilo/<技能名>/
+shared/<能力域>/<技能名>/
 ├── SKILL.md            # 技能说明（入口）
 ├── scripts/            # 该技能自身依赖的脚本
 │   ├── xxx.sh
@@ -124,12 +129,33 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 ### 共享技能（shared/）
 
+#### 研发流程（`shared/development-process/`）
+
 | 名称 | 说明 |
 |------|------|
-| `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱（含 DECISIONS.md 决策记录） |
-| `archify` | 从代码库或自然语言描述生成可验证的交互式架构图（architecture / workflow / sequence / dataflow / lifecycle 五类），自包含 HTML，支持 PNG/SVG/WebM 导出与架构差异对比（Architecture Delta） |
-| `ai-control-plane` | AI 控制面：通过 HTTP 驱动真机 HPLC 抄表工作台（8790 `/api/ai/v1`）——串口会话（cco/sta）、固件烧录、日志观察/取证、帧查询、场景编排（源自 ZZT_SELF `.agents/skills/ai-control-plane`，v2.1.0） |
-| `sta-version-build` | STA 固件大小版本自动编译打包（基线 / 大同小异 / 小同大异三组变体编译并归档 zip） |
+| `brainstorming` | 需求存在关键设计选择时，先形成获批设计。 |
+| `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加、多需求切换，且多步计划由 `writing-plans` 生成。 |
+| `writing-plans` | 已批准的多步骤任务在改动前形成可执行、可验证的实施计划。 |
+
+#### 代码质量（`shared/code-quality/`）
+
+| 名称 | 说明 |
+|------|------|
+| `test-driven-development` | 行为变更先做失败前置检查，再最小实现和回归验证。 |
+| `coding-standards` | 嵌入式 C 代码的最小改动、资源清理和可移植性规范。 |
+
+#### 实机闭环（`shared/hardware-in-the-loop/`）
+
+| 名称 | 说明 |
+|------|------|
+| `ai-control-plane` | 通过 HTTP 驱动真机 HPLC 工作台，覆盖串口、烧录、日志和证据。 |
+| `sta-version-build` | STA 固件大小版本的三组变体编译、打包和归档。 |
+
+#### 研究与技术表达（`shared/research-and-technical-expression/`）
+
+| 名称 | 说明 |
+|------|------|
+| `archify` | 生成可验证的架构、流程、时序、数据流和生命周期图。 |
 
 
 ## 添加新技能
@@ -153,7 +179,7 @@ description: <一句话描述>
 
 ### 存放位置
 
-- **所有环境共用** → `shared/<技能名>/SKILL.md`
+- **所有环境共用** → `shared/<能力域>/<技能名>/SKILL.md`
 - **仅 Kilo (WSL)** → `kilo/<技能名>/SKILL.md`
 - **仅 Reasonix (Win)** → `reasonix/<技能名>/SKILL.md`
 

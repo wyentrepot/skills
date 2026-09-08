@@ -9,7 +9,7 @@
 #      bash ~/skills/scripts/install-kilo.sh
 #
 # 作用：
-#   将 shared/ 和 kilo/ 下的所有技能目录软链接到 ~/.kilo/skills/
+#   递归发现 shared/ 和 kilo/ 下的所有技能目录，并软链接到 ~/.kilo/skills/
 #   Kilo 启动时自动加载 ~/.kilo/skills/ 下的技能。
 # ============================================================================
 
@@ -37,10 +37,8 @@ for src_dir in "${SOURCE_DIRS[@]}"; do
         continue
     fi
 
-    for skill_dir in "$full_src"/*/; do
-        # 跳过非目录（如 README.md）
-        [ -d "$skill_dir" ] || continue
-
+    while IFS= read -r -d '' skill_file; do
+        skill_dir="$(dirname "$skill_file")"
         skill_name="$(basename "$skill_dir")"
         target="$KILO_SKILLS_DIR/$skill_name"
 
@@ -63,7 +61,7 @@ for src_dir in "${SOURCE_DIRS[@]}"; do
         ln -s "$skill_dir" "$target"
         echo "  [链接] $skill_name → $target"
         LINKED=$((LINKED + 1))
-    done
+    done < <(find "$full_src" -type f -name SKILL.md -print0 | sort -z)
 done
 
 echo ""
