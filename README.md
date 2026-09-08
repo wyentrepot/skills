@@ -6,14 +6,14 @@
 
 ```
 skills/
-├── shared/          # 所有环境共用的技能（Kilo + Reasonix 都加载）
+├── shared/          # 所有环境共用的技能（Kilo + Reasonix + DSH 都加载）
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
 ├── dsh/             # 仅 DeepSeek Harness (DSH) 使用的技能（superpowers-dsh 移植包）
 ├── scripts/         # 工具级安装脚本（不属于任何技能）
 │   ├── install-kilo.sh        # WSL 下将技能链接到 ~/.kilo/skills
 │   ├── install-reasonix.sh    # Win 下将技能注册到 ~/.reasonix/config.toml
-│   └── install-dsh.sh         # 将 dsh/ 技能复制到 $DSH_HOME/skills（DSH 用户技能根）
+│   └── install-dsh.sh         # 将 dsh/ + shared/ 技能复制到 $DSH_HOME/skills（DSH 用户技能根）
 └── README.md
 ```
 
@@ -64,9 +64,9 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 ### 个人办公 — Windows (DeepSeek Harness)
 
-同上，skills 仓库 clone 到个人电脑，运行 `scripts/install-dsh.sh` 即可（将 `dsh/` 下的 superpowers-dsh 技能复制到 `$DSH_HOME/skills`，DSH 下一会话自动加载）。
+同上，skills 仓库 clone 到个人电脑，运行 `scripts/install-dsh.sh` 即可（将 `dsh/` 下的 superpowers-dsh 技能与 `shared/` 下的共用技能复制到 `$DSH_HOME/skills`，DSH 下一会话自动加载）。
 
-> DSH 技能发现根：用户 `<DSH_HOME>/skills`、项目 `<项目根>/.dsh/skills`。若不用脚本，也可手动把 `dsh/*` 复制到 `<DSH_HOME>/skills/`。注意：公司 DLP 环境下请用 WSL 或 DSH 自身进程写入，避免把 git checkout 到 NTFS 后被 E-SafeNet 透明加密，导致 DSH 无法读取。
+> DSH 技能发现根：用户 `<DSH_HOME>/skills`、项目 `<项目根>/.dsh/skills`。若不用脚本，也可手动把 `dsh/*` 与 `shared/*` 复制到 `<DSH_HOME>/skills/`。注意：公司 DLP 环境下请用 WSL 或 DSH 自身进程写入，避免把 git checkout 到 NTFS 后被 E-SafeNet 透明加密，导致 DSH 无法读取。
 
 ## 技能列表
 
@@ -99,7 +99,6 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `superpowers-using-git-worktrees` | 需要隔离工作空间时 |
 | `superpowers-writing-skills` | 编写/测试 Reasonix skill |
 | `superpowers-sync-upstream` | 同步上游 obra/superpowers 更新 |
-| `ai-control-plane` | AI 控制面：通过 HTTP 驱动真机 HPLC 抄表工作台（8790 `/api/ai/v1`）——串口会话（cco/sta）、固件烧录、日志观察/取证、帧查询、场景编排（源自 ZZT_SELF `.agents/skills/ai-control-plane`，v2.0.0） |
 | `opencode-mcp` | Reasonix → OpenCode MCP 桥：把编码/探索/审查任务委托给 WSL 内 OpenCode 的 zen-* agent 执行（含可用模型与派发规则，详见 docs/opencode-mcp-reasonix.md） |
 
 
@@ -130,6 +129,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 |------|------|
 | `req-mgmt` | 需求/进度管理：需求变更 ADR 只追加 + 多需求并行切换，解决需求频繁变更导致项目混乱（含 DECISIONS.md 决策记录） |
 | `archify` | 从代码库或自然语言描述生成可验证的交互式架构图（architecture / workflow / sequence / dataflow / lifecycle 五类），自包含 HTML，支持 PNG/SVG/WebM 导出与架构差异对比（Architecture Delta） |
+| `ai-control-plane` | AI 控制面：通过 HTTP 驱动真机 HPLC 抄表工作台（8790 `/api/ai/v1`）——串口会话（cco/sta）、固件烧录、日志观察/取证、帧查询、场景编排（源自 ZZT_SELF `.agents/skills/ai-control-plane`，v2.1.0） |
 
 
 ## 添加新技能

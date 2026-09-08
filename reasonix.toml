@@ -6,6 +6,7 @@
 # 精确列出本仓库 shared/ 与 reasonix/ 下的技能目录（不含 README、不含 opencode-mcp）
 paths = [
     "shared/req-mgmt",
+    "shared/ai-control-plane",
     "reasonix/superpowers-brainstorming",
     "reasonix/superpowers-executing-plans",
     "reasonix/superpowers-finishing-a-development-branch",
@@ -17,7 +18,6 @@ paths = [
     "reasonix/superpowers-verification-before-completion",
     "reasonix/superpowers-writing-plans",
     "reasonix/superpowers-writing-skills",
-    "reasonix/ai-control-plane",
 ]
 # 防御性排除：即使路径被改回父目录，opencode-mcp 也不加载
 disabled_skills = ["opencode-mcp"]

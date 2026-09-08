@@ -11,7 +11,7 @@
 #      DSH_HOME="C:/Users/xxx/AppData/Roaming/dsh-desktop/harness" bash .../install-dsh.sh
 #
 # 作用：
-#   将 dsh/ 下的所有技能目录复制到 <DSH_HOME>/skills/（DSH 用户技能根）。
+#   将 dsh/ 和 shared/ 下的所有技能目录复制到 <DSH_HOME>/skills/（DSH 用户技能根）。
 #   DSH 实时监视该目录，安装后无需重启即可在下一会话看到这些技能。
 #
 # 注意（公司 DLP 环境）：
@@ -23,7 +23,8 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SRC_DIR="$REPO_DIR/dsh"
+# dsh/ = DSH 专属技能；shared/ = 所有环境共用技能（与 install-kilo.sh 对齐）
+SOURCE_DIRS=("$REPO_DIR/dsh" "$REPO_DIR/shared")
 
 # 解析 DSH_HOME：优先使用环境变量
 if [ -z "${DSH_HOME:-}" ]; then
@@ -49,8 +50,8 @@ DST_DIR="$DSH_HOME/skills"
 echo "==> 技能仓库: $REPO_DIR"
 echo "==> DSH 技能根: $DST_DIR"
 
-if [ ! -d "$SRC_DIR" ]; then
-    echo "  [错误] 未找到 dsh 技能目录: $SRC_DIR"
+if [ ! -d "${SOURCE_DIRS[0]}" ] && [ ! -d "${SOURCE_DIRS[1]}" ]; then
+    echo "  [错误] 未找到 dsh / shared 技能目录: ${SOURCE_DIRS[*]}"
     exit 1
 fi
 
@@ -58,24 +59,30 @@ mkdir -p "$DST_DIR"
 
 COPIED=0
 SKIPPED=0
-for skill_dir in "$SRC_DIR"/*/; do
-    [ -d "$skill_dir" ] || continue
-    skill_name="$(basename "$skill_dir")"
-    target="$DST_DIR/$skill_name"
-
-    if [ -d "$target" ] && [ -f "$target/SKILL.md" ]; then
-        # 已安装：用 diff 判断是否一致
-        if diff -rq "$skill_dir" "$target" >/dev/null 2>&1; then
-            echo "  [跳过] 已安装且一致: $skill_name"
-            SKIPPED=$((SKIPPED + 1))
-            continue
-        fi
-        echo "  [更新] 内容有差异，覆盖: $skill_name"
-    else
-        echo "  [复制] $skill_name → $target"
+for src_dir in "${SOURCE_DIRS[@]}"; do
+    if [ ! -d "$src_dir" ]; then
+        echo "  [跳过] 源目录不存在: $src_dir"
+        continue
     fi
-    cp -r "$skill_dir" "$target"
-    COPIED=$((COPIED + 1))
+    for skill_dir in "$src_dir"/*/; do
+        [ -d "$skill_dir" ] || continue
+        skill_name="$(basename "$skill_dir")"
+        target="$DST_DIR/$skill_name"
+
+        if [ -d "$target" ] && [ -f "$target/SKILL.md" ]; then
+            # 已安装：用 diff 判断是否一致
+            if diff -rq "$skill_dir" "$target" >/dev/null 2>&1; then
+                echo "  [跳过] 已安装且一致: $skill_name"
+                SKIPPED=$((SKIPPED + 1))
+                continue
+            fi
+            echo "  [更新] 内容有差异，覆盖: $skill_name"
+        else
+            echo "  [复制] $skill_name → $target"
+        fi
+        cp -r "$skill_dir" "$target"
+        COPIED=$((COPIED + 1))
+    done
 done
 
 echo ""
