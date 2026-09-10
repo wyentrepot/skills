@@ -5,9 +5,9 @@
 [skills]
 # 精确列出本仓库 shared/ 与 reasonix/ 下的技能目录（不含 README、不含 opencode-mcp）
 paths = [
-    "shared/req-mgmt",
-    "shared/ai-control-plane",
-    "shared/sta-version-build",
+    "shared/development-process/req-mgmt",
+    "shared/hardware-in-the-loop/ai-control-plane",
+    "shared/hardware-in-the-loop/firmware-version-build",
     "reasonix/superpowers-brainstorming",
     "reasonix/superpowers-executing-plans",
     "reasonix/superpowers-finishing-a-development-branch",
