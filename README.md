@@ -84,7 +84,6 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `observe-workbench-logs` | ZZT_SELF 工作台日志/帧的硬件非侵入、有界 AI 取证 |
 | `splc-flash-loop` | 固件编译→烧录→验证闭环 |
 | `sta-version-diff` | 版本差异分析文档生成 |
-| `sta-test-build` | STA Unity 单元测试模式编译打包 |
 
 ### Reasonix 技能（`reasonix/`）
 
@@ -149,7 +148,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | 名称 | 说明 |
 |------|------|
 | `ai-control-plane` | 通过 HTTP 驱动真机 HPLC 工作台，覆盖串口、烧录、日志和证据。 |
-| `sta-version-build` | STA 固件大小版本的三组变体编译、打包和归档。 |
+| `firmware-version-build` | CCO/ECU/STA 固件版本编译、打包和归档（逐层加载：cco / sta / 单元测试）。 |
 
 #### 研究与技术表达（`shared/research-and-technical-expression/`）
 
