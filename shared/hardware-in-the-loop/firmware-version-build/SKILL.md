@@ -27,6 +27,7 @@ CCO / ECU / STA 固件的版本编译、打包与归档。本文件是**入口�
 5. **归档放 firmware/ 之外**：`make clean` / bin2all 会清 `firmware/*`；归档目录内的 .bin/.dat 会被下次 clean 递归误删（只拷 .zip 最安全）。
 6. **日期无前导零**：`08` 会被编译器当八进制；用 `8` 或 `0x08`。
 7. **`map.sh` 需可执行**：若 Makefile 调 `./map.sh` 而文件无 x 位，make 在最后一步报 `Permission denied`（固件已产出但退出码 2）→ `chmod +x map.sh`。
-8. **干净构建 `-j8` 竞态**：`make clean && make {target} -j8` 可能报 `No rule to make target 'built-in.o'`（all 的递归构建与链接并行）→ 全新构建用**串行** `make clean && make {target} jump`。
+8. **干净构建 `-j8` 竞态（实测确认）**：`make clean && make {target} -j8` 会报 `No rule to make target 'built-in.o'`，且 `make -jN start_recursive_build` 并行递归 + 串行链接同样触发竞态——顶层 `built-in.o` 与子目录 `built-in.o` 链接时序竞争导致**符号错乱、产物损坏**（实测 `bsp_gpio.o` 的 `ld` 变未定义、sha1 链接报 undefined reference）。**结论：全新构建必须串行** `make clean && make {target} jump`（实测 ~32~76s，足够快，无并行必要）。若确有并行需求，用 `build_fw.sh --jobs N`（自动回退串行）。
 9. **临时目录不可靠**：沙箱/CI 的 /tmp 可能在命令间清空；备份、暂存放项目内或同一条命令内完成。
 10. **同名 SVERSION 出现在多个地区分支**：编辑时必须带日期 / DIQU_PRINTF_STRING 上下文锚定唯一分支。
+11. **优先使用 `build_fw.sh` 一键脚本**：项目根若存在 `build_fw.sh`（CCO/ECU），用它替代手动 备份→改宏→编译→等待→校验→归档→恢复 流程；脚本内置同步等待（无固定 sleep）、字节校验（fcversion + iap 头 + zip 完整性）与自动恢复头文件。详见 references/cco.md。

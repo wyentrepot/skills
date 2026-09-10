@@ -144,7 +144,7 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 | 名称 | 说明 |
 |------|------|
-| `ai-control-plane` | 通过 HTTP 驱动真机 HPLC 工作台，覆盖串口、烧录、日志和证据。 |
+| `ai-control-plane` | 通过 HTTP 驱动真机 HPLC 工作台（v2 任务门面默认，v1 专家兼容），覆盖串口、烧录、日志和证据。内容源：工作台仓库 `.agents/skills/ai-control-plane`（v2.4.0，自包含参考 + 校验脚本）。 |
 | `firmware-version-build` | CCO/ECU/STA 固件版本编译、打包和归档（逐层加载：cco / sta / 单元测试）。 |
 
 #### 研究与技术表达（`shared/research-and-technical-expression/`）

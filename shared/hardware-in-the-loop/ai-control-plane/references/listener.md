@@ -106,5 +106,48 @@ curl "http://127.0.0.1:8790/api/ai/v1/listener/minute-periods?task_no=1&cco_tei=
 - **查档位**：`GET http://127.0.0.1:8765/api/version` → `parse_backend`（及 `dll_available`）。
 - `none` 时 `/api/parse`（8765）返回 503，不影响串口采集与日志索引。
 - **起网关**（Windows 侧，需人在 Windows 执行）：桌面 `wsl环境部署.bat` → [4] 启动 / [5] 停止；
-  或 `powershell -File uart-map.ps1 -Action start-gateway`（详见 `tools/scripts/README.md`）。
+  或 `powershell -File <WORKBENCH_ROOT>/tools/scripts/uart-map.ps1 -Action start-gateway`
+  （详见 `<WORKBENCH_ROOT>/tools/scripts/README.md`）。WSL/Linux 侧无此步骤。
 - **排查提示**：帧缺协议明细时先看 `parse_backend`；`none` → 先起网关再继续，别怀疑数据/链路。
+
+## v2 语义查询与分层证据（REQS-0022，默认 AI 入口）
+
+v1 `/listener/traces`、`/listener/minute-periods` 之外，v2 `POST /api/ai/v2/investigations`
+的 listener observation 支持两个语义 `match.kind`（能力声明见 `GET /api/ai/v1/listener/schema`）：
+
+| kind | 内部实现 | 关键字段 |
+| --- | --- | --- |
+| `trace_query` | `TraceService.run_replay` | `feature.app_id`（必填）/`msg_seq`/`frm_type`/`dst_tei`/`nid`/`channel`/`app_raw_contains`/`raw_hex_contains`；`scope`=flow/round/campaign；`directions`=downlink/uplink/ack |
+| `minute_periods` | `list_task_minute_periods` | `task_no`（必填）/`period_minutes`/`cco_tei`/`nid`；窗口仅 `time_range` |
+
+- `raw_hex_contains` 只作末端验证（删空白后 2–512 个偶数十六进制字符），
+  **无 `app_id`/NID/时间窗/帧 ID 窗口任一收窄条件 → 422**。
+- 分钟采集业务归属以 `freeze_time` 为准，不得用上报时间替代。
+
+证据下钻 `GET /api/ai/v2/jobs/{job_id}/evidence?level=L1|L2|L3`：
+
+- L1：范围摘要（index_id/总帧数/帧类型与方向计数/通信流组数/`correlation_status`/
+  解析后端/refs），≤3 KiB，**无 raw_hex**。
+- L2：解析投影（≤16 KiB 且 ≤50 条），含 `FrmType`/NID/`SRC`/`DST`/方向/`meter_addrs`/
+  分钟 `freeze_time`/`response_result` 与 `ref`。
+- L3：`?ref=listener:<index_id>:<frame_id>`（可多个，≤10）回传完整帧 JSON
+  （`raw_hex`/`summary`/`parse_error`/`analysis`/trace 链接）；只认同 job 的 ref，
+  无关 ref 403、格式错 422。
+
+```bash
+# v2：一次 trace_query 语义查询（复用既有 TraceService，不新建索引）
+curl -X POST http://127.0.0.1:8790/api/ai/v2/investigations \
+  -H "Content-Type: application/json" -d '{
+    "client_request_id":"req-0022-trace-1",
+    "observations":[{
+      "source":"listener","target":{"index_id":"idx-20260630-a"},
+      "window":{"mode":"time_range","start":"00:00:00.000","end":"00:05:00.000"},
+      "match":{"kind":"trace_query","scope":"round",
+               "feature":{"app_id":"0003","nid":"00947F69"},
+               "directions":["downlink","uplink","ack"]},
+      "completion":{"match_count":1}
+    }]}'
+
+# 证据下钻：先 L1 摘要，再 L3 用同 job ref 回传完整帧
+curl "http://127.0.0.1:8790/api/ai/v2/jobs/<job_id>/evidence?level=L3&ref=listener:idx-20260630-a:123"
+```
