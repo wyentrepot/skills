@@ -112,13 +112,10 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | 名称 | 说明 |
 |------|------|
 | `using-superpowers` | 入口技能：如何查找与使用技能 |
-| `brainstorming` | 构思功能/新点子 → 先出批准的设计再写代码 |
-| `writing-plans` | 多步骤任务先写计划 |
 | `executing-plans` | 带检查点逐步执行计划 |
 | `subagent-driven-development` | 每任务派发全新子代理并评审 |
 | `dispatching-parallel-agents` | 独立工作扇出到并行代理 |
 | `systematic-debugging` | 遇到 bug/测试失败，从证据出发调查 |
-| `test-driven-development` | 写代码前先写失败测试（RED-GREEN-REFACTOR） |
 | `verification-before-completion` | 说"完成/修复/通过"前先出示证据 |
 | `requesting-code-review` | 合并前获得严格评审 |
 | `receiving-code-review` | 收到 review 反馈后逐条核验 |
