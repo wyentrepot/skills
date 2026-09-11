@@ -10,7 +10,8 @@ skills/
 │   ├── development-process/              # 需求、设计与实施计划
 │   ├── code-quality/                     # 测试与编码规范
 │   ├── hardware-in-the-loop/             # 实机控制、烧录和构建闭环
-│   └── research-and-technical-expression/ # 架构与技术表达
+│   ├── research-and-technical-expression/ # 架构与技术表达
+│   └── knowledge-base/                   # 知识库查阅（渐进式加载：索引→关键词/同义词→定位+片段→经验沉淀）
 ├── codex/           # 仅 Codex 使用的专属技能
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
