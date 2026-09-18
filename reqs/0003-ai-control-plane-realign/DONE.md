@@ -20,3 +20,11 @@
 - SKILL.md：新增「路径根解析」（references/scripts 相对技能目录；apps/docs/tools/data/.build_plain/DECISIONS 相对 `<WORKBENCH_ROOT>`）+「实测校准」；v2 表补 `jobs/{id}/cancel`；`applies-to` 修正为 `/01-workfile-ai/01-zzt/ZZT_SELF`；wsl环境部署.bat/uart-map.ps1 平台步骤条件化（仅 Windows 侧、由人执行）。
 - 事实源统一：全局 `shared/hardware-in-the-loop/ai-control-plane` ↔ 仓库 `.agents/skills/ai-control-plane` 双向同步一致；陈旧 `.reasonix/skills/ai-control-plane`（v2.1.0）加 README 标注待删；README 技能表注明内容源。
 - 验证：校验脚本三态（探测 PASS / 显式根 PASS / 无效根明确报错）；技能内全部路径可解析；`git diff --check` 通过（README.md 由 CRLF 规范化为 LF）；运行时副本 `/root/.dsh/skills/ai-control-plane` 同步。
+
+## 2026-09-17 ｜ 交叉登记（来源：工作台仓库 REQS-0032）
+- ai-control-plane 升 **v2.6.0**：SKILL.md 新增「用途路由（渐进式加载）」+「日常轻量档」
+  （免工作台应用层帧 parse/build/verify，1376.2 内嵌 698/645；自动严格/指定宽容）。
+- 版本调和：本仓曾存的 v2.5.0 未提交态为陈旧内容，本次以仓库侧最新校准为基拣入
+  本仓仅有增量（listener `/api/concurrent/stats`、features 周期统计/深化应用）。
+- 三副本一致：shared ↔ 仓库 `.agents` ↔ `/root/.dsh` 运行时；`verify_api_inventory.py` PASS。
+- 提交：ad92506（REQS-0032 详情见工作台仓库 reqs/0032-ai-appframe-build-parse/）。
