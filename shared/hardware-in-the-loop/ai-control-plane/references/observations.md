@@ -33,7 +33,9 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 复合两种：
 
 - `{"kind":"sequence","steps":[叶子×1–16],"max_interval_ms":<1–3600000>}`（按顺序出现）
-- `{"kind":"not_seen","matcher":<叶子>}`（窗口内**未**出现即成功）
+- `{"kind":"not_seen","matcher":<叶子>}`（窗口内**未**出现才可能判成功；口径与实测一致：
+  仅**闭合窗**（`time_range`/`cursor_range`）未出现才判 pass；实时 `live` 窗到期且无可信
+  到达时间时 verdict=`inconclusive`（`live_window_unverified`），不能据此证明"没有发生"）
 
 ## window 三种
 

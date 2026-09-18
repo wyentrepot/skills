@@ -40,7 +40,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v2/investigations \
        "window":{"mode":"live","timeout_seconds":120},
        "match":{"kind":"literal","value":"发送成功"}},
       {"source":"listener", "target":{"index_id":"idx-20260902"},
-       "window":{"mode":"historical","index_id":"idx-20260902","start_frame_id":1,"end_frame_id":500},
+       "window":{"mode":"cursor_range","type":"cursor_range","index_id":"idx-20260902","start_frame_id":1,"end_frame_id":500},
        "match":{"kind":"literal","value":"上行"}}
     ],
     "cleanup":"owned_only"
@@ -48,8 +48,8 @@ curl -X POST http://127.0.0.1:8790/api/ai/v2/investigations \
 ```
 
 返回 `202` 和 `job_id`。历史窗口完成后可立即读 job；live 窗口由服务端 worker 推进。
-`job_state` 表示任务执行状态，`verdict` 只表示观察/验证结论（`pass/fail/inconclusive/error`）。
-模块动作和烧录成功不会伪装成业务 `pass`。
+`job_state` 表示任务执行状态，`verdict` 只用于 investigation 观察（`pass/fail/inconclusive/error`；
+module_action/verification_run/flash_job 恒 null），模块动作/验证/烧录成功不会伪装成业务 `pass`。
 
 证据按需升级：先取 L1 摘要，再按判断需要取 L2 受限明细，最后用 L3 稳定引用定位原始帧或
 Artifact。历史日志必须保留 `index_id`；实时 `not_seen` 没有可信到达时间时只能是
@@ -236,7 +236,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 | 字段 | 约束 |
 |---|---|
 | `source` | 仅 `module_log` 或 `listener` |
-| `match`（module_log） | 叶子：`literal`（非空、≤512 字符）/ `regex`（≤256 字符）/ `loghook_rule`（`rule_id` 须适用于该模块）；复合：`sequence`（1–16 个叶子 + `max_interval_ms` 1–3600000）、`not_seen`（包装一个叶子，窗口内未出现即成功） |
+| `match`（module_log） | 叶子：`literal`（非空、≤512 字符）/ `regex`（≤256 字符）/ `loghook_rule`（`rule_id` 须适用于该模块）；复合：`sequence`（1–16 个叶子 + `max_interval_ms` 1–3600000）、`not_seen`（包装一个叶子；仅闭合窗 `time_range`/`cursor_range` 内未出现才判 pass，实时 live 窗到期无可信到达时间只能返回 inconclusive（`live_window_unverified`），不能据此证明"没有发生"） |
 | `match`（listener） | kind 仅 `parsed_frame` / `frame_query`，**必填**；过滤靠 `frame_kind`（当前仅 `central_beacon`，留空=任意）、`where`（数组，`{"path":"analysis.full.<字段>","op":"eq","value":...}`）、`selector`（`first`/`last`/`all`/`first_per_minute`/`nth`） |
 | `window.mode` | `live`（只盯创建之后的新内容，`timeout_seconds` 1–3600）/ `time_range`（`start`/`end`，module_log 用 ISO 8601 且须落在内存日志边界内，listener 用 HH:MM:SS）/ `cursor_range`（module_log 给 `start_seq`/`end_seq`，跨度 ≤10000 行；listener 给 `index_id` + `start_frame_id`/`end_frame_id`，跨度 ≤500 帧） |
 | `context.before/after` | 0–100，命中时取前后若干行做证据（module_log） |
@@ -369,7 +369,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/verify \
 # 下发一帧（串口未开时自动选择可用串口打开）
 curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"send":{"afn":"06","fn":"F230","params":{}},"profile":"anhui","client_request_id":"s-001"}'
+  -d '{"send":{"afn":"10","fn":"F230","params":{}},"profile":"anhui","client_request_id":"s-001"}'
 
 # 只等一帧：感知 CCO 主动上报（30 秒内等到 06H-F230 上行即成功）
 curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
@@ -420,7 +420,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/close \
 ```bash
 # 语义化构帧：只经 scenario_codec 算字节，不触串口——下发前预检报文用
 curl -X POST http://127.0.0.1:8790/api/simcon/build -H "Content-Type: application/json" \
-  -d '{"afn":"06","fn":"F230","params":{},"direction":"down","profile":"anhui","seq":1}'
+  -d '{"afn":"10","fn":"F230","params":{},"direction":"down","profile":"anhui","seq":1}'
 # → 200 {"hex":"68 ...","length":N}；构帧失败 422
 
 # 当前生效应答规则（内置+覆盖）
@@ -432,16 +432,16 @@ curl http://127.0.0.1:8790/api/simcon/responders
 ## 10. 协议字典查询（无鉴权）
 
 ```bash
-curl http://127.0.0.1:8790/api/dict                    # 四本字典清单（id/名称/条数/来源路径）
+curl http://127.0.0.1:8790/api/dict                    # 五本字典清单（id/名称/条数/来源路径）
 curl "http://127.0.0.1:8790/api/dict/oad?q=电压"       # 698.45 OAD
 curl "http://127.0.0.1:8790/api/dict/di?q=..."         # 645-2007 DI
-curl "http://127.0.0.1:8790/api/dict/afn-fn?q=F230"    # 1376.2 AFN/Fn 语义
+curl "http://127.0.0.1:8790/api/dict/afn-fn?q=06"        # 1376.2 AFN/Fn 语义
 curl "http://127.0.0.1:8790/api/dict/rules?q=..."      # loghooks 事件规则
 ```
 
 - `?q=` 模糊过滤（对条目 JSON 全文做小写包含匹配）。
 - 典型用途：查 OAD/DI/Fn 语义支撑验证结论；**observation 的 `loghook_rule.rule_id` 从 `/api/dict/rules` 查**。
-- 数据直接来自 `libs/parser_lib/adapters/*/metadata/*.json` 与 `libs/loghooks/rules/`，改 JSON 即生效（无拷贝层）。
+- 数据直接来自 `libs/parser_lib/adapters/*/metadata/*.json`、`libs/loghooks/rules/` 与 `libs/case_library/data/cases.json`（用例库），改 JSON 即生效（无拷贝层）。
 
 ## 11. 验证编排 REST（无鉴权，可选）
 

@@ -7,7 +7,7 @@ serial port, starts a listener, or performs a flash operation.
 
 Examples::
 
-    python scripts/verify_api_inventory.py --repo-root /01-workfile-ai/01-zzt/ZZT_SELF
+    python scripts/verify_api_inventory.py --repo-root "D:\\2-侦听台改造"
     WORKBENCH_ROOT=/01-workfile-ai/01-zzt/ZZT_SELF python scripts/verify_api_inventory.py --json
 
 The script resolves the workbench repository root in this order: ``--repo-root``
@@ -31,10 +31,12 @@ from typing import Any
 
 # 候选工作台仓库根（按存在性探测；也可用 --repo-root / WORKBENCH_ROOT 显式指定）。
 _WORKBENCH_ROOT_CANDIDATES = (
+    r"D:\2-侦听台改造",                          # Windows 当前工作台仓库
     "/01-workfile-ai/01-zzt/ZZT_SELF",          # WSL 权威仓库
-    "/mnt/d/019-wy-tool/ZZT_SELF",              # Windows D 盘（WSL 挂载）
+    "/mnt/d/2-侦听台改造",                       # Windows D 盘（WSL 挂载）
+    "/mnt/d/019-wy-tool/ZZT_SELF",              # Windows D 盘旧位置（WSL 挂载）
     "/mnt/d/12-wy-share-workfile/01-zzt/ZZT_SELF",
-    r"D:\019-wy-tool\ZZT_SELF",                 # Windows 原生路径
+    r"D:\019-wy-tool\ZZT_SELF",                 # Windows 原生旧路径
 )
 
 
@@ -58,10 +60,17 @@ def _resolve_repo_root(cli_value: str | None) -> Path:
     )
 
 
-REPO_ROOT = _resolve_repo_root(None)
-for _path in (REPO_ROOT, REPO_ROOT / "apps", REPO_ROOT / "libs"):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
+def _bootstrap(repo_root: str | None) -> Path:
+    """解析仓库根并把 <root>、<root>/apps、<root>/libs 注入 sys.path。
+
+    必须在 main() 解析完 argparse 之后再调用；build_openapi() 对
+    workbench.app 是延迟 import，因此这里注入 sys.path 即可生效。
+    """
+    resolved = _resolve_repo_root(repo_root)
+    for path in (resolved, resolved / "apps", resolved / "libs"):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
+    return resolved
 
 
 V2_PREFIX = "/api/ai/v2/"
@@ -114,6 +123,9 @@ def _inert_sub_app():
 
 def build_openapi() -> dict[str, Any]:
     """Build the workbench OpenAPI document without starting hardware."""
+    # 跳过 workbench.app 的模块级默认装配（否则 import 即以真实工厂再建一整套
+    # 默认 app）；本脚本随后自行调用惰性工厂 create_workbench_app。
+    os.environ["WORKBENCH_SKIP_DEFAULT_APP"] = "1"
     from workbench.app import create_workbench_app
 
     # Keep the app's persistence dependencies outside the repository.  The
@@ -319,13 +331,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="emit the complete machine-readable inventory")
     parser.add_argument("--repo-root", default=None, help="工作台仓库根（默认读 WORKBENCH_ROOT 或探测候选路径）")
     args = parser.parse_args(argv)
-    # 提前解析 --repo-root，避免模块级探测用错根。
-    global REPO_ROOT
-    if args.repo_root:
-        REPO_ROOT = _resolve_repo_root(args.repo_root)
-        for _path in (REPO_ROOT, REPO_ROOT / "apps", REPO_ROOT / "libs"):
-            if str(_path) not in sys.path:
-                sys.path.insert(0, str(_path))
+    # 解析 --repo-root 并注入 sys.path（放在 argparse 之后，保证参数生效）。
+    _bootstrap(args.repo_root)
     result = verify(build_openapi())
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))

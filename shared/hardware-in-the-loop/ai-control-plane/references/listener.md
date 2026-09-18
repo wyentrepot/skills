@@ -52,6 +52,11 @@ curl http://127.0.0.1:8790/api/ai/v1/listener/traces -H "Authorization: Bearer <
 - `feature`：`app_id` 必填（0003 并发抄表 / 0001 单表 / 00A1 / 0020 / 0008）；
   `msg_seq` 留空=聚合；`frm_type`/`dst_tei`/`nid`/`app_raw_contains` 可选。
   scope 粒度：flow（须给 msg_seq）/ round / campaign。
+- **msg_seq 取值来源（易踩坑）**：`feature.msg_seq` 匹配的是 `trace_extract`
+  从 APP_RAW 业务头（[4:6] LE16）**物化**进 `frames.msg_seq` 列的报文序号
+  （如 `1EC2`）；它与帧列表/详情里展示的 MAC 层 `Msdu_seq`（如 `AFBC`）**不同源、
+  数值无关**——照页面展示值查询会 0 命中。取值前先用单帧详情的 `feature_hint`
+  反推，或直接留空聚合。
 - 报告结构：`summary` + `rounds[]`（时间簇 → `flows[]` 状态机链
   sent→acked→responded→confirmed/denied/timeout，每阶段挂 `frame_id` 可回帧详情钻取；
   `meter_table` 表地址 ok/denied/missing 三分类）+ `proxy_graph` + `bad_frames`（坏帧只计数）。

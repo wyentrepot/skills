@@ -6,24 +6,25 @@
 ## 协议字典（查语义 / 查规则 id）
 
 ```bash
-curl http://127.0.0.1:8790/api/dict                    # 四本字典清单（id/名称/条数/来源路径）
+curl http://127.0.0.1:8790/api/dict                    # 五本字典清单（id/名称/条数/来源路径）
 curl "http://127.0.0.1:8790/api/dict/oad?q=电压"       # 698.45 OAD
 curl "http://127.0.0.1:8790/api/dict/di?q=..."         # 645-2007 DI
-curl "http://127.0.0.1:8790/api/dict/afn-fn?q=F230"    # 1376.2 AFN/Fn 语义
+curl "http://127.0.0.1:8790/api/dict/afn-fn?q=06"      # 1376.2 AFN/Fn 语义
 curl "http://127.0.0.1:8790/api/dict/rules?q=<事件名>" # loghooks 事件规则
+curl "http://127.0.0.1:8790/api/dict/cases?q=..."      # 检测用例库（REQS-0025）
 ```
 
 - `?q=` 模糊过滤（对条目 JSON 全文做小写包含匹配）。
 - **observation 的 `loghook_rule.rule_id` 从 `/api/dict/rules` 查**。
-- 数据直接来自 `libs/parser_lib/adapters/*/metadata/*.json` 与 `libs/loghooks/rules/`，改 JSON 即生效。
+- 数据直接来自 `libs/parser_lib/adapters/*/metadata/*.json`、`libs/loghooks/rules/` 与 `libs/case_library/data/cases.json`（用例库），改 JSON 即生效。
 
 ## 构帧预检 / 应答规则
 
 ```bash
 # 语义化构帧：只经 scenario_codec 算字节不触串口，下发前预检报文（422=构帧失败）
 curl -X POST http://127.0.0.1:8790/api/simcon/build -H "Content-Type: application/json" \
-  -d '{"afn":"06","fn":"F230","params":{},"direction":"down","profile":"anhui","seq":1}'
-# → {"hex":"...","length":N}
+  -d '{"afn":"10","fn":"F230","params":{},"direction":"down","profile":"anhui","seq":1}'
+# → {"hex":"...","length":N}（afn=10/F230 实测可构 15B；注意 AFN=06 只支持 F1-F5，写 06/F230 会 422）
 
 # simcon 当前生效应答规则（内置+覆盖）
 curl http://127.0.0.1:8790/api/simcon/responders

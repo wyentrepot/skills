@@ -1,6 +1,6 @@
 # API 契约文档（事实来源：后端代码）
 
-> 基线：workbench OpenAPI（运行 `python tools/scripts/verify_api_inventory.py` 校验）。本文档从后端路由代码逐条核对生成，
+> 基线：workbench OpenAPI（`python tools/scripts/verify_api_inventory.py` 校验 **v2 层与代码一致**；本 .md 路由表不在脚本校验范围，改接口时人工同步）。本文档从后端路由代码逐条核对生成，
 > **改接口必须先改代码、再同步本文件**；开发新功能或排查联调问题按本文件对账。
 >
 > 事实来源文件（改动接口时同步核对）：
@@ -8,7 +8,7 @@
 > - 模块日志：`apps/module_log/app.py`（loghooks 路由也在其中）
 > - 模拟集中器：`libs/sim_concentrator/api.py`
 > - AI 控制面：v2 任务门面 `apps/workbench/ai_v2_api.py`；v1 专家兼容层 `apps/workbench/ai_api.py`（用法手册：`.agents/skills/ai-control-plane/SKILL.md`、`docs/16-AI操作指南.md`）
-> - 编排：`apps/workbench/api.py`；字典：`apps/workbench/dict_api.py`；串口 Profile：`apps/workbench/serial_profile_api.py`
+> - 编排：`apps/workbench/api.py`；字典：`apps/workbench/dict_api.py`；串口 Profile：`apps/workbench/serial_profile_api.py`；串口标签：`apps/workbench/serial_tags_api.py`
 > - 挂载/代理：`apps/workbench/app.py`（`_PrefixProxy` / `_mount_proxied`）
 
 ---
@@ -34,7 +34,7 @@
 | `/api/module-serial/*` | module_log | `/api/module-serial` | 透传 |
 | `/api/fs/*` | module_log | `/api/fs` | 透传 |
 | `/api/loghooks/*` | module_log | `/api/loghooks` | 透传 |
-| `/api/simcon/*` | module_log（内部又挂 simcon 子应用） | `/api/simcon` | 透传 |
+| `/api/simcon/*` | simcon 子应用（**平级顶层 mount**，REQS-0023；不经过 module_log） | — | 无剥前缀，内部路径即 `/api/simcon/*`（见 §5） |
 | `/api/ai/v1/*` | workbench 自身（ai_api router） | — | AI 控制面 |
 | `/api/*`（其余） | workbench 自身（编排/字典/串口 Profile router） | — | 见 §4/§7/§8 |
 | `/static/*`、`/` | workbench 静态外壳 | — | NoCacheHTMLStaticFiles |
@@ -67,6 +67,7 @@
 | GET | `/` | 外壳 `index.html` |
 | GET | `/api/platform-version` | `{app, version, module_log_mounted, listener_mounted}`（外壳页脚探测用） |
 | GET | `/api/health` | `{status:"ok", app:"workbench"}`（AI/脚本探活入口） |
+| POST | `/api/shutdown` | `{ok:true, detail}`；触发 uvicorn graceful 停机，进程退出、不再后台驻留 |
 
 ## 3. 侦听台 listener
 
@@ -96,6 +97,7 @@
 | GET | `/api/indexes` ＋ 别名 `/api/listener/indexes` | — | 索引清单（LogFileService.list_indexes()） | 503 |
 | GET | `/api/indexes/{index_id}/frames` ＋ 别名（同参数同 §3.1 帧参数） | 同上 | LogFileService.list_index_frames() | 404 / 422 / 503 |
 | GET | `/api/indexes/{index_id}/frames/{frame_id}` ＋ 别名 | — | 单帧详情 | 404 / 500 / 503 |
+| GET | `/api/concurrent/stats` | `period=15m\|30s\|1h\|900`（REQS-0030 侦听台只读统计） | 与 simcon `/batch/stats` 同口径：最大并发数/成功率/平均耗时/重复下发；来源=收发库 frame_log AFN=F1/FN=F1，tx/rx 均为侦听帧，**不发帧** | 200（空库返回空 buckets） |
 
 workbench 外部：`/api/indexes/... → /api/listener/indexes/...`；别名路由对应外部
 `/api/listener/indexes/... → /api/listener/listener/indexes/...`（两者均可用）。
@@ -205,6 +207,14 @@ workbench 外部：`/api/indexes/... → /api/listener/indexes/...`；别名路�
 | GET | `/report_buckets` | `limit` | 主动上报分桶（G6）：`{buckets{F1..F5, F5_power 停复电}, total}` | 200 |
 | GET | `/frames` | `session_id?, direction:tx\|rx?, updown:up\|down?, afn?, fn?, kind?, run_id?, after_seq, limit≤500` | **`{session_id, entries[], next_after_seq, matched_total, has_more, counts{tx,rx,uplink}}`** —— 列表键是 `entries`（2026-08-31 b7647ab 前端曾误读 `frames` 键致卡"加载中"） | 404 无会话 |
 | GET | `/session` | — | `{current, sessions[]}`（sc-* 帧日志会话，落盘 data/logs/simcon/） | 200 |
+| GET | `/recipes` | — | recipe 目录（REQS-0028）：`{recipes:[{id, name, description, params, profile, module, baudrate}]}` | 200 |
+| GET | `/recipes/{recipe_id}` | — | 单个 recipe 详情（含参数定义） | 404 不存在 |
+| POST | `/recipes/{recipe_id}/run` | `{"overrides": {参数key: 值}}` | 一次调用执行整套常用步骤（清空/添加档案等），返回判定结果；复用当前串口，未打开则自建 | 404 / 422 参数非法 / 409 执行失败 |
+| GET | `/batch/stats?period=` | `period`（如 15m/1h/900，默认 15 分钟） | 并发抄表周期统计（REQS-0030）：最大并发数/成功率/平均耗时/重复下发 + `jobs_count` | 200 |
+| GET | `/archive/query` | `start=0, count=200, timeout=5.0` | 查档案（10H-F2 构帧下发，模块实时获取，临时存储）+ `session` 快照 | 504 超时 / 409 串口未打开 |
+| GET | `/archive` | — | 当前临时档案快照 `{fetched_at, nodes, total}`（复位不保存） | 200 |
+| GET | `/archive/export.xlsx` | — | 导出临时档案为 Excel（FileResponse，落 data/runtime/archive_*.xlsx） | 409 档案为空 |
+| GET | `/online` | `timeout=5.0` | 查在网（10H-F1 网络规模口径） | 504 超时 / 409 串口未打开 |
 
 ## 6. AI 任务门面 v2（默认 AI 调用面）
 
@@ -305,7 +315,10 @@ python tools/scripts/verify_api_inventory.py
 python tools/scripts/verify_api_inventory.py --json
 ```
 
-该检查只构造带惰性 stub 子应用的 OpenAPI，不打开串口、不启动侦听台、不执行真实烧录。
+该检查的覆盖面：**v2 路由（8 条的存在性/命名 schema）、AI 能力映射、listener schema
+能力位与代码一致**；**不校验本 .md 文档的路由表**——v1/底层路由与文字描述靠改接口时
+人工同步本文件。检查只构造带惰性 stub 子应用的 OpenAPI，不打开串口、不启动侦听台、
+不执行真实烧录。
 
 ## 6.1 AI 控制面 v1（专家兼容层；默认 AI 不再从这里起步）
 
@@ -335,9 +348,13 @@ python tools/scripts/verify_api_inventory.py --json
 | POST | `/listener/traces` | `listener:trace` | 建追踪（202 → operation；幂等） |
 | GET | `/listener/traces`、`/listener/traces/{id}` | `evidence:read` | 追踪列表 / 快照 |
 | GET | `/listener/indexes`、`/{id}/frames`、`/{id}/frames/{frame_id}` | `evidence:read` | 帧索引查询（参数同 §3.2） |
+| GET | `/listener/minute-periods` | `evidence:read` | 分钟采集分桶（REQS-0018，复用页面同款口径）：`task_no` 必填、`period_minutes≤1440`、`cco_tei≤8`、`nid≤16`、`start_time`/`end_time≤12` | 422 / 503 |
 | POST | `/simcon/verify` | `simcon:verify` | 验证任务（202 → operation；409 占用） |
 | POST | `/simcon/step` | `simcon:send` | 单步下发（422/409） |
 | GET | `/simcon/frames` | `simcon:read` | 帧日志查询（过滤器同 §5，返回 `entries` 键） |
+| GET | `/simcon/store/events` | `simcon:read` | 06H 主动上报历史事件（REQS-0018 持久层）：`{items}`，`limit≤500` 默认 50 | 503 |
+| GET | `/simcon/store/snapshots` | `simcon:read` | 查询结果快照列表（REQS-0018 临时层）：`afn`/`fn` 过滤、`limit≤200` 默认 20，`{items}` | 503 |
+| GET | `/simcon/store/snapshots/{snapshot_id}` | `simcon:read` | 某快照明细行：`{items}` | 503 |
 | GET | `/simcon/session` | `simcon:read` | 当前会话 |
 | POST | `/simcon/open`、`/simcon/close` | `simcon:send` | 开/关串口 |
 
@@ -374,6 +391,9 @@ evidence:read, simcon:verify, simcon:send, simcon:read`。
 | GET | `/api/dict/cases?category=&type=&q=` | 检测用例库（REQS-0025）：`{count, declared_total:269, categories, items}`；category 过滤分类、type=case\|param_table、q 模糊过滤 |
 | GET | `/api/dict/cases/{entry_id}` | 单条用例/参数表行（404 不存在）；字段含 purpose/frames/steps/criteria/source（doc+distill+section 可追溯） |
 
+> 口径（REQS-0025）：`declared_total=269` 是蒸馏原文「双模通信检测条目体系共 269 项」的**体系宣称值**；
+> `count` 是库内**实枚举条目**（237 检测项 + 42 参数表行 = 279），两者口径不同、各有出处，不相等属预期。
+
 ## 9. 串口 Profile（`/api/serial-profile`）
 
 | 方法 | 路径 | 请求体 | 响应要点 | 状态码 |
@@ -381,6 +401,9 @@ evidence:read, simcon:verify, simcon:send, simcon:read`。
 | GET | `/api/serial-profile` | — | `{profiles{四槽}, slots}` | 422 配置损坏 |
 | PUT | `/api/serial-profile` | `{profiles:{slot:{mapping_id, enabled, baudrate, parity, bytesize, stopbits}}}` | `{saved:true, profiles}` **只保存不碰硬件** | 422 未知映射/非法 |
 | POST | `/api/serial-profile/apply` | —（只读已保存版本） | 应用结果（module/listener/simcon 槽） | 503 应用器未配置 |
+| GET | `/api/serial-profile/status` | — | 四槽当前状态与占用只读快照（ADR-35），不打开/关闭任何串口 | 503 应用器未配置 |
+| GET | `/api/serial-tags` | — | 角色↔COM 标签映射 + 角色说明 + 在线端口 `port_details` | 200 |
+| PUT | `/api/serial-tags` | `{tags:{<role>:<com>}}` | `{saved:true, path, ...}`（落 data/runtime/serial_tags.json，只落盘不碰硬件） | 200 |
 
 ---
 
@@ -406,7 +429,7 @@ evidence:read, simcon:verify, simcon:send, simcon:read`。
 4. **simcon 帧列表响应键是 `entries`**（含 `counts/next_after_seq/has_more`），不是 `frames`。
 5. **异步端点返回 202 + 轮询**：logs/open、serial/start、module-serial start/flash、AI flash/observation/trace/simcon-verify、POST /api/run。前端必须实现轮询与取消。
 6. **409 是资源冲突**（串口占用/互斥），不是错误——UI 应提示而非报错弹窗。
-7. 字典/规则端点数据来自 `libs/parser_lib/adapters/*/metadata/*.json` 与 `libs/loghooks/rules/`，**改 JSON 即改端点输出**（无拷贝层）。
+7. 字典/规则端点数据来自 `libs/parser_lib/adapters/*/metadata/*.json`、`libs/loghooks/rules/` 与 `libs/case_library/data/cases.json`（用例库），**改 JSON 即改端点输出**（无拷贝层）。
 8. AI 控制面：新接口必须声明 scope；烧录类必须走 firmware_roots 白名单；幂等键 `client_request_id` 全程携带。
 9. v2 是默认低 token 任务入口；v1 保持专家兼容，不得因库存收敛而删除或改名。
 10. 主题（REQS-0012）：`html[data-theme]` + `--theme-registry` 单一数据源；新增主题只改 `tokens-v2.css` 一处；iframe 内页面需带防闪跳 boot 脚本与 `wb-theme-change` message 监听（见 §12 已知缺口）。

@@ -47,6 +47,8 @@
 | 单步下发 / 感知主动上报 | `POST step` | ADR-5 语义化（send 只写 afn/fn+params）；REQS-0027：auto_expect 自动生成 expect + per-Fn 超时档位（5s/59s/99s）+ 否认码人话 + 旁听帧归类 |
 | 应答预期规则库 | `GET expect_rules` | AFN/Fn→应答形态映射、否认码 6D/6E/6F 语义、超时档位声明（蒸馏出处标注） |
 | 并发抄表滑窗 | `POST batch_read`、`GET batch_read/{id}`、`POST …/stop` | 最大并发可配；回一帧补一发保持在途=最大并发；应答/否认/超时均释放槽位 |
+| 周期统计 | `GET batch/stats?period=15m` | REQS-0030：按周期聚合最大并发数/成功数成功率/平均耗时/重复下发；周期为 API 参数，AI 可调 |
+| 深化应用（档案/在网） | `GET archive/query`、`GET archive`、`GET archive/export.xlsx`、`GET online` | 档案 10H-F2 构帧实时获取（临时存储+Excel 导出）；在网 10H-F1 规模口径；max_concurrent 前置校验 1~20（否认 109 口径） |
 | 统一抄读表格 | `GET readings` | 单抄/并抄/快照/上报共用一表；成功率统计 + 否认码细分 + 来源/结果筛选 |
 | 上报分类型计数 | `GET report_buckets` | 06H F1-F5 各桶；停复电（协议类型 04H）单独一表 |
 | 语义构帧预览 | `POST build` | 只算不发（scenario_codec），UI 帧预览 |
@@ -94,7 +96,7 @@
 | 侦听台控制/查询 | `listener/ensure·stop`、`listener/schema`、`listener/indexes…`、`listener/traces…` | 通信流追踪 202 → operation → result.report |
 | 侦听台语义查询与分层证据（REQS-0022） | v2 `investigations` 的 `match.kind=trace_query`（复用 TraceService）/ `minute_periods`（复用 list_task_minute_periods）；`jobs/{id}/evidence?level=L1\|L2\|L3` | L1 摘要 ≤3KiB 无 raw_hex；L2 解析投影 ≤16KiB/50 条；L3 同 job `ref=listener:<index_id>:<frame_id>` 回传完整帧（越权 403/格式错 422） |
 | 模拟集中器 | `simcon/verify·step·frames·session·open·close` | resource 固定 simcon，帧列表 `entries` 键 |
-| 使用文档 | `.agents/skills/ai-control-plane/SKILL.md`（v2.0.0：路由器 + references 按需加载）+ `docs/16-AI操作指南.md` | 错误码语义 401/403/404/409/422/503 见技能主文件 |
+| 使用文档 | `.agents/skills/ai-control-plane/SKILL.md`（v2.6.0：用途路由 + 日常轻量档 + references 按需加载）+ `docs/16-AI操作指南.md` | 错误码语义 401/403/404/409/422/503 见技能主文件 |
 
 ## 9. 支撑工具链
 
@@ -112,5 +114,5 @@
 | --- | --- |
 | `docs/api-contract.md` | 接口契约总表（路由/参数/响应键/状态码/前缀映射/契约红线） |
 | `docs/16-AI操作指南.md` | AI 控制面完整操作手册 |
-| `.agents/skills/ai-control-plane/SKILL.md` | AI 控制面执行步骤（v2.0.0：路由器 + references 按需加载） |
+| `.agents/skills/ai-control-plane/SKILL.md` | AI 控制面执行步骤（v2.6.0：用途路由 + 日常轻量档 + references 按需加载） |
 | `REQS-INDEX.md` / `DECISIONS.md` | 需求索引 / ADR 决策记录 |
