@@ -9,6 +9,29 @@
 - 命名：`{地区}-{批次}-STA-sv{mSVer}-{date}-isv{FC_SVERSION}-idate{INTERNAL_VER_DATE}-1.zip`（`make/scripts/bin2dat.sh`）。
 - 输出：`sta/firmware/{TARGET}/`；归档：`archive_{TARGET}/`（项目根）。
 
+## 本层唯一执行路径（脚本）
+
+**STA 固件版本编译一律用技能脚本 `scripts/build_variants.sh`**，单/多编译由输入参数决定，勿手搓。脚本唯一权威源在技能目录，**无需复制进仓库**，任何位置可运行：
+
+```bash
+SK=/home/02-skill-fc/skills/fc/firmware-version-build/scripts/build_variants.sh
+$SK --dry-run --repo /home/H_STA/02/sta    # 先干跑: 打印基线+变体版本矩阵与预期 zip 名，确认后
+$SK --repo /home/H_STA/02/sta              # 多编译(默认): 大同小异 + 小同大异 两变体
+$SK --repo /home/H_STA/02/sta --variants datong_xiaoyi   # 单编译: 只出一个变体
+# 也可不传 --repo：进入仓库内任意子目录后运行（自动向上探测）；
+# 或用环境变量: STA_REPO=/home/H_STA/02/sta $SK
+```
+
+- **路径保护**：仓库定位优先级 `--repo` > `$STA_REPO` > 当前目录向上自动探测；未定位到合法 STA 仓库（缺版本头文件/Makefile/目标）一律拒绝执行；执行前打印"操作仓库"。
+- 单/多编译 = 脚本参数：`--variants "datong_xiaoyi xiaotong_dayi"`（默认两变体）或 `--variants datong_xiaoyi`（单变体）。
+- 默认 `TARGET=sta_venus2m_v7`；可 `$SK sta_venus2m`、`--variants "..."`、`--force`（头文件有未提交改动时）。
+- 产物：`archive_{TARGET}/{变体}/`（全量）+ `{TARGET}_firmware.zip`（各变体仅 zip + 版本对照 readme），落在**定位到的仓库根目录**。
+- 脚本内置：基线读取（块作用域定位宏，跨地区安全）、预期 zip 名校验（sv/date/isv/idate 字段）、每变体编译后立即归档并恢复头文件、任一步失败 trap 自动恢复。
+- 脚本前置要求：目标仓库为 git 仓库、版本头文件无未提交改动、`make clean` 后**串行** `make {TARGET} jump`（见红线 8）。
+- 脚本对 agent 的价值：一次后台调用替代 ~15 次工具往返；仅"确认基线 + 校验交付物"需要 agent 介入。
+
+> 以下手动流程仅作脚本异常时的排查参照，不当作并行流程。
+
 ## 前置：确定编译目标 (TARGET)
 
 | 目标类型 | make target |

@@ -1,6 +1,7 @@
 ---
 name: splc-flash-loop
 description: 构建、烧录并验证 SPLC STA/CCO V2 固件，使用现有 EDBG 闭环工具保存工程级证据和按 profile 隔离的持久参数。适用于 STA venus2m、CCO venus8m、版本与地区验证、串口证据采集、环境诊断及 STA Unity 测试。
+disable-model-invocation: true
 ---
 
 # SPLC STA/CCO V2 实机闭环

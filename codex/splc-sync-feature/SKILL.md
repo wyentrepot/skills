@@ -1,6 +1,7 @@
 ---
 name: splc-sync-feature
 description: Synchronize one named feature across the SPLC STA firmware at /home/H_STA/04/sta and the upper-host configuration tool at /home/H_STA/py_manage/moduleparasconfigtool. Use when a user asks to add, change, rename, remove, test, build, or package a firmware capability that is configured, packed, unpacked, displayed, or validated by the upper-host tool, especially changes to FileFooter, feature flags, province schemes, version-manager metadata, or their UI.
+disable-model-invocation: true
 ---
 
 # SPLC dual-project feature synchronization

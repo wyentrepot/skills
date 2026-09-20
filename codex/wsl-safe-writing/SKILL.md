@@ -1,6 +1,7 @@
 ---
 name: wsl-safe-writing
 description: Use only when mutating files on the WSL-native Linux filesystem, such as paths under `/home`, `/etc`, or `/var`, especially where DLP or anti-leak encryption may corrupt cross-environment writes. Do not use for Windows-native paths (`C:\...`, `%USERPROFILE%`, `.codex` skills/plugins) or Windows drives mounted under `/mnt`; use Windows tools directly for those targets.
+disable-model-invocation: true
 ---
 
 # WSL Safe Writing

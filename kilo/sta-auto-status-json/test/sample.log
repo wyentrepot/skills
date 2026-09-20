@@ -1,0 +1,7 @@
+147308 | info | aps_ioctrl_nwk.c (950)| onnet cnt = 1
+[STA-AUTO] mode=FORMAL attempt_mode=1 max_attempts=3 state=WAIT_GATE next=BOOT_DELAY
+[STA-AUTO] firmware=VALID record=VALID task_id=270 slot=1 offset=0xc0000 size=396912 crc=0xdf023045 attempts=3 lifecycle=1
+[STA-AUTO] targets=owned:1 need_upgrade:1 round_cooldown=0s external_pause=0s
+[STA-AUTO] boot=WAIT remaining=457s poll=300s affair=IDLE cco_upgrade=NO platform_test=NO
+[STA-AUTO] gate: online=1 archive=1 ratio=100% required=95% waited=0s/10800s
+[STA-AUTO] conditions: firmware=OK record=OK boot=NO affair_idle=OK cco_idle=OK test_allowed=OK attempts=OK archive=OK ratio_or_timeout=OK

@@ -7,7 +7,7 @@
 paths = [
     "shared/development-process/req-mgmt",
     "shared/hardware-in-the-loop/ai-control-plane",
-    "shared/hardware-in-the-loop/firmware-version-build",
+    "fc/firmware-version-build",
     "reasonix/superpowers-brainstorming",
     "reasonix/superpowers-executing-plans",
     "reasonix/superpowers-finishing-a-development-branch",
