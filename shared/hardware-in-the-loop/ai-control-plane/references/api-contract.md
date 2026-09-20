@@ -86,10 +86,14 @@
 
 ### 3.2 日志索引与帧
 
+> **经 8790 workbench 调用必须加 `/listener` 前缀**（§1.2 剥前缀规则；本表「内部路径」仅直连
+> 8765 独立版可用。实测经 8790：`POST /api/logs/open` → 404，`POST /api/listener/logs/open` → 202，
+> 2026-09-20 核查）。
+
 | 方法 | 内部路径 | 参数/请求体 | 响应要点 | 状态码 |
 | --- | --- | --- | --- | --- |
-| POST | `/api/logs/open` | `{path≤1024}` | 索引任务受理（异步，轮询 status） | **202** / 404 / 409 串口运行中 / 503 |
-| GET | `/api/logs/status` | — | LogFileService.status() 结构 | 503 |
+| POST | `/api/logs/open`（8790 网关：`/api/listener/logs/open`） | `{path≤1024}` | 索引任务受理（异步，轮询 status） | **202** / 404 / 409 串口运行中 / 503 |
+| GET | `/api/logs/status`（8790 网关：`/api/listener/logs/status`） | — | LogFileService.status() 结构 | 503 |
 | GET | `/api/logs/frames` | `offset,limit≤500,query,nid, start_time,end_time,after_id` | LogFileService.list_frames()（增量用 after_id） | 422 / 503 |
 | GET | `/api/logs/frames/{frame_id}` | — | 单帧详情（含解析字段） | 404 / 500 / 503 |
 | GET | `/api/logs/minute-analysis` | `period_minutes≤1440, cco_tei(3位hex), nid` | `{periods, summary{total_periods,report_count}, delete_config_stats, filters}` | 422 / 503 |

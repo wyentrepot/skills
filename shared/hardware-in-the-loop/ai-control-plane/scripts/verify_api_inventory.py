@@ -7,12 +7,13 @@ serial port, starts a listener, or performs a flash operation.
 
 Examples::
 
-    python scripts/verify_api_inventory.py --repo-root "D:\\2-侦听台改造"
-    WORKBENCH_ROOT=/01-workfile-ai/01-zzt/ZZT_SELF python scripts/verify_api_inventory.py --json
+    python scripts/verify_api_inventory.py --repo-root <WORKBENCH_ROOT>
+    WORKBENCH_ROOT=<WORKBENCH_ROOT> python scripts/verify_api_inventory.py --json
 
 The script resolves the workbench repository root in this order: ``--repo-root``
-argument, ``WORKBENCH_ROOT`` environment variable, then a probe of known
-candidate paths (WSL/Windows checkouts).  It exits non-zero when one of the
+argument, ``WORKBENCH_ROOT`` environment variable, the ``~/.config/workbench/repo-root``
+config file, then an upward probe of ``apps/workbench`` from the current directory
+(no hard-coded paths).  It exits non-zero when one of the
 eight v2 facade routes or its named schemas drifts.  The JSON form is intended
 for CI and documentation generation; the default form is a compact
 human-readable inventory.  It only builds inert FastAPI sub-applications and
@@ -29,34 +30,40 @@ from pathlib import Path
 from typing import Any
 
 
-# 候选工作台仓库根（按存在性探测；也可用 --repo-root / WORKBENCH_ROOT 显式指定）。
-_WORKBENCH_ROOT_CANDIDATES = (
-    r"D:\2-侦听台改造",                          # Windows 当前工作台仓库
-    "/01-workfile-ai/01-zzt/ZZT_SELF",          # WSL 权威仓库
-    "/mnt/d/2-侦听台改造",                       # Windows D 盘（WSL 挂载）
-    "/mnt/d/019-wy-tool/ZZT_SELF",              # Windows D 盘旧位置（WSL 挂载）
-    "/mnt/d/12-wy-share-workfile/01-zzt/ZZT_SELF",
-    r"D:\019-wy-tool\ZZT_SELF",                 # Windows 原生旧路径
-)
+# 工作台仓库根配置文件（单点登记；也可用 --repo-root / WORKBENCH_ROOT 显式指定）。
+_CONFIG_FILE = Path.home() / ".config" / "workbench" / "repo-root"
+
+
+def _validated_root(candidate: Path, source: str) -> Path:
+    if not (candidate / "apps" / "workbench").is_dir():
+        raise SystemExit(
+            f"[verify_api_inventory] WORKBENCH_ROOT 无效（缺少 apps/workbench）：{candidate}"
+            f"（来源：{source}）\n"
+            "请检查该路径；仓库搬家后更新 ~/.config/workbench/repo-root 即可。"
+        )
+    return candidate
 
 
 def _resolve_repo_root(cli_value: str | None) -> Path:
+    """单点解析工作台仓库根：--repo-root > WORKBENCH_ROOT > 配置文件 > cwd 上溯探测。
+
+    技能与脚本均不写死绝对路径；仓库搬家只需更新 ~/.config/workbench/repo-root。
+    """
     raw = cli_value or os.environ.get("WORKBENCH_ROOT") or ""
     if raw:
-        candidate = Path(raw).expanduser().resolve()
-        if not (candidate / "apps" / "workbench").is_dir():
-            raise SystemExit(
-                f"[verify_api_inventory] WORKBENCH_ROOT 无效（缺少 apps/workbench）：{candidate}\n"
-                f"请设置 WORKBENCH_ROOT 或 --repo-root 指向工作台仓库根。"
-            )
-        return candidate
-    for raw_candidate in _WORKBENCH_ROOT_CANDIDATES:
-        candidate = Path(raw_candidate)
+        return _validated_root(Path(raw).expanduser().resolve(), "--repo-root/WORKBENCH_ROOT")
+    if _CONFIG_FILE.is_file():
+        lines = _CONFIG_FILE.read_text(encoding="utf-8").splitlines()
+        first = next((line.strip() for line in lines if line.strip()), "")
+        if first:
+            return _validated_root(Path(first).expanduser().resolve(), str(_CONFIG_FILE))
+    for candidate in (Path.cwd(), *Path.cwd().parents):
         if (candidate / "apps" / "workbench").is_dir():
-            return candidate
+            return candidate.resolve()
     raise SystemExit(
-        "[verify_api_inventory] 未找到工作台仓库根。请用 --repo-root <WORKBENCH_ROOT> 或 "
-        "WORKBENCH_ROOT 环境变量显式指定。"
+        "[verify_api_inventory] 未找到工作台仓库根。解析顺序：--repo-root 参数 > "
+        f"WORKBENCH_ROOT 环境变量 > {_CONFIG_FILE}（一行绝对路径）> "
+        "当前目录向上探测 apps/workbench。"
     )
 
 

@@ -5,8 +5,8 @@ argument-hint: "[task, e.g. 解析这帧报文 / 构一帧645读电能 / 监控c
 metadata:
   author: reasonix
   version: "2.6.0"
-  applies-to: /01-workfile-ai/01-zzt/ZZT_SELF（WSL 权威仓库；Windows 侧见 D:\2-侦听台改造，解析网关明文区部署另见 D:\019-wy-tool\ZZT_SELF）
-  source: 工作台仓库 .agents/skills/ai-control-plane（事实源，改动先改此处再回灌全局）
+  applies-to: 任意工作区（<WORKBENCH_ROOT> 按序单点解析见下文「路径根解析」；本机工作台仓库根登记于 ~/.config/workbench/repo-root，仓库搬家只改该文件）
+  source: skill-fc shared/hardware-in-the-loop/ai-control-plane（唯一事实源；各工作区 .agents/skills/ 内的同名副本一律为指向此处的软链接，改动只改这里）
 ---
 
 # AI 控制面 Skill（ai-control-plane）
@@ -76,11 +76,12 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
 
 - `references/`、`scripts/`、`使用经验/` **相对本技能目录**——直接存在，无需外部依赖。
 - `apps/`、`docs/`、`tools/`、`data/`、`.build_plain/`、`DECISIONS.md` **相对工作台仓库根
-  `<WORKBENCH_ROOT>`**：权威路径 `/01-workfile-ai/01-zzt/ZZT_SELF`（WSL），Windows 侧
-  `D:\2-侦听台改造`；深读源码/决策前先向用户确认仓库路径，或按
-  `scripts/verify_api_inventory.py` 的候选列表探测。
-- 校验脚本 `scripts/verify_api_inventory.py` 已内置仓库根解析：`--repo-root` →
-  `WORKBENCH_ROOT` 环境变量 → 候选路径探测；找不到时给出明确报错。只构造惰性
+  `<WORKBENCH_ROOT>`**。技能不写死任何绝对路径，`<WORKBENCH_ROOT>` 按序单点解析：
+  ① `WORKBENCH_ROOT` 环境变量 → ② 配置文件 `~/.config/workbench/repo-root`（一行绝对
+  路径，仓库搬家只改这一处）→ ③ 从当前目录向上探测 `apps/workbench` 标记（工作区在
+  仓库内时免配置）。解析不到时先向用户确认，不要凭记忆猜路径。
+- 校验脚本 `scripts/verify_api_inventory.py` 使用同一解析顺序（`--repo-root` 显式参数
+  最优先），找不到时给出明确报错。只构造惰性
   stub（不开串口、不启动侦听台、不执行烧录）。
 
 ## 实测校准（2026-09-10 全链 e2e 验证，与真实接口一致）
@@ -107,9 +108,11 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
   不可取消红线不变，耐心等到该终态即可。
 - **烧录文件选择**：升级/烧录用 `iap_{cco|ecu}_*.bin`（IAP 串口升级镜像），**禁止用 `flash_*.bin`**
   （生产烧录整片镜像，bootloader 升级路径不认，实测 ~24% 后模块中止）；先读 `firmware/readme.txt`。
-- **工作台启动**：`cd <WORKBENCH_ROOT>/apps && PYTHONPATH=apps:libs python -m workbench.run`
-  （README 的 `python -m workbench.run` 隐含 apps/ 在 sys.path；直接跑会
-  `ModuleNotFoundError: shared`）。
+- **工作台启动**：`python3 <WORKBENCH_ROOT>/apps/workbench/run.py`——任意 cwd 可启动
+  （run.py 自动把仓库根/apps/libs 注入 sys.path，不再依赖 cd/PYTHONPATH）。后台常驻：
+  `WORKBENCH_LOCAL_FULL_ACCESS=1 nohup python3 <WORKBENCH_ROOT>/apps/workbench/run.py > /tmp/wb.log 2>&1 &`。
+  v2 免 token 必带 `WORKBENCH_LOCAL_FULL_ACCESS=1`（漏掉 capabilities 即 401）；
+  headless 环境可加 `HPLC_OPEN_WORKBENCH=0` 关闭自动开浏览器（免 xdg-open 噪音）。
 
 ## 任务 → 最小路径速查
 
