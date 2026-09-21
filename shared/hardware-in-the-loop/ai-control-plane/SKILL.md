@@ -4,17 +4,24 @@ description: Control the HPLC meter-reading workbench over HTTP as an AI, plus a
 argument-hint: "[task, e.g. 解析这帧报文 / 构一帧645读电能 / 监控cco日志直到出现XX / 烧录固件]"
 metadata:
   author: reasonix
-  version: "2.6.0"
+  version: "2.7.0"
   applies-to: 任意工作区（<WORKBENCH_ROOT> 按序单点解析见下文「路径根解析」；本机工作台仓库根登记于 ~/.config/workbench/repo-root，仓库搬家只改该文件）
   source: skill-fc shared/hardware-in-the-loop/ai-control-plane（唯一事实源；各工作区 .agents/skills/ 内的同名副本一律为指向此处的软链接，改动只改这里）
 ---
 
 # AI 控制面 Skill（ai-control-plane）
 
-**先按用途路由（渐进式加载）：帧解析/构帧/回验 → 直接用下方「日常轻量档」，无需工作台；
-需要驱动工作台时，默认按任务走 v2 最小路径：先发现能力，提交一个
-任务，读取 job，按需取证；只读对应 reference，用完即止。** v2 不删除 v1；八步细节
-在下方 v1 references/*.md，完整手册为 `references/operation-guide.md`（自包含副本）。
+**先判定在线还是离线，再按用途路由（渐进式加载）**：
+1. **手头只有帧/文件**（hex 报文、7E 原始日志、CCO 日志、xlsx、问题归档包）→ **离线路径优先**，
+   **不要默认起工作台**：应用层帧解析/构帧/回验走「日常轻量档」；分钟采集漏点/11E4/11E3/时钟偏移
+   走 `mclt-collect-analysis` 专项技能（本技能只在其不可用时回退 offline-analysis 组合）；
+   漏点定位走 `offline-analysis.md`（+cco-log +listener 三件套）。
+2. **需要驱动工作台**（串口指令、烧录、观察取证、simcon 验证、组网诊断、在线索引查询）→
+   按任务走 v2 最小路径：先发现能力，提交一个任务，读取 job，按需取证；只读对应 reference，用完即止。
+3. **拿不准后端有哪些源/能力** → 先 `GET /api/ai/v2/capabilities` 看 source_health 与能力清单再选路
+   （v2 能力响应落地最小调用链示例后（REQS-0033），以响应内示例为准，不再翻文档）。
+
+v2 不删除 v1；八步细节在下方 v1 references/*.md，完整手册为 `references/operation-guide.md`（自包含副本）。
 **例外**：下表「离线数据排查 / 漏点定位」是组合场景，允许一次读
 `offline-analysis.md` + `cco-log.md` + `listener.md` 三个 reference（多端交叉验证需要）。
 
@@ -23,6 +30,7 @@ metadata:
 | 当前用途 | 读什么 | 不必读 |
 | --- | --- | --- |
 | **用户给了帧要解析 / 要构帧 / 产帧要回验（TDD）** | **下方「日常轻量档」即可独立完成** | 全部 v1/v2 references |
+| 分钟采集漏点/11E4/11E3/时钟偏移（离线文件分析） | **`mclt-collect-analysis` 专项技能**（tools/taiti/分钟采集） | 本技能全功能档（非此场景） |
 | 发现后端/逻辑资源、并行观察、取证 | v2 门面速查（下表） | 全部 v1 references |
 | 监控日志 / 盯帧取证 | references/observations.md | 其余 |
 | 发串口指令 / 烧录固件 | references/module-serial.md | 其余 |
@@ -83,6 +91,10 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
 - 校验脚本 `scripts/verify_api_inventory.py` 使用同一解析顺序（`--repo-root` 显式参数
   最优先），找不到时给出明确报错。只构造惰性
   stub（不开串口、不启动侦听台、不执行烧录）。
+- `使用经验/` **定位（维护边界，勿当条例清单用）**：只存放**跨环境的一次性事实与过程复盘**
+  （如某次会话环境特有的坑）。凡是能固化为本技能边界条款的内容——启动姿势、红线、
+  路由判定、数据源清单——**一律直接写进 SKILL.md / references 正文，不再往 `使用经验/`
+  追加条例**（防止双份文档漂移、避免"踩坑清单"无限膨胀掩盖正文）。
 
 ## 实测校准（2026-09-10 全链 e2e 验证，与真实接口一致）
 
@@ -109,10 +121,19 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
 - **烧录文件选择**：升级/烧录用 `iap_{cco|ecu}_*.bin`（IAP 串口升级镜像），**禁止用 `flash_*.bin`**
   （生产烧录整片镜像，bootloader 升级路径不认，实测 ~24% 后模块中止）；先读 `firmware/readme.txt`。
 - **工作台启动**：`python3 <WORKBENCH_ROOT>/apps/workbench/run.py`——任意 cwd 可启动
-  （run.py 自动把仓库根/apps/libs 注入 sys.path，不再依赖 cd/PYTHONPATH）。后台常驻：
-  `WORKBENCH_LOCAL_FULL_ACCESS=1 nohup python3 <WORKBENCH_ROOT>/apps/workbench/run.py > /tmp/wb.log 2>&1 &`。
-  v2 免 token 必带 `WORKBENCH_LOCAL_FULL_ACCESS=1`（漏掉 capabilities 即 401）；
-  headless 环境可加 `HPLC_OPEN_WORKBENCH=0` 关闭自动开浏览器（免 xdg-open 噪音）。
+  （run.py 自动把仓库根/apps/libs 注入 sys.path，不再依赖 cd/PYTHONPATH）。
+  **v2 免 token 必带 `WORKBENCH_LOCAL_FULL_ACCESS=1`**（漏掉则 v2 capabilities 直接 401
+  「缺少 Bearer token」）；headless/无图形环境加 `HPLC_OPEN_WORKBENCH=0`
+  关闭自动开浏览器（免 xdg-open 噪音）。
+- **后台常驻按环境二选一**：
+  - **agent 沙箱 / 容器环境**（bash 工具调用隔离，nohup 子进程随外层 shell 结束被回收）：
+    **必须用受管后台任务方式常驻**（如执行环境的 `run_in_background` 后台任务），
+    日志从该任务输出读取；**不要用 nohup**（实测进程被回收、/tmp 日志也不跨调用留存）。
+  - **桌面 / WSL 人机环境**：可
+    `WORKBENCH_LOCAL_FULL_ACCESS=1 nohup python3 <WORKBENCH_ROOT>/apps/workbench/run.py > /tmp/wb.log 2>&1 &`。
+- **停止工作台**：**禁用 `pkill -f "workbench.run"`**——它会匹配到正在执行该命令的
+  shell 自身命令行导致自杀（见红线 7）；先 `pgrep -af "[w]orkbench.run"` 拿 PID 再 kill，
+  或直接终止所启用的受管后台任务。
 
 ## 任务 → 最小路径速查
 
@@ -178,6 +199,11 @@ v2 每次写任务带 `client_request_id`；默认 `cleanup=owned_only`。`job_s
 5. **授权归人**：`admin/grants` 只由人本机执行；AI 只使用已有 token，不自签、不扩权。
 6. 不可取消的操作（烧录/verify）耐心等到终态，不并发重试；v2 对应
    `flash-jobs`/`verification-runs`，v1 对应 `flash-operations`/`simcon/verify`。
+7. **禁用 `pkill/pgrep -f` 匹配自身**：`pkill -f "workbench.run"` 会命中正在执行该命令的
+   shell 自身（bash -c 命令行含明文串），误杀自身；停止工作台先
+   `pgrep -af "[w]orkbench.run"` 拿 PID 再 kill，或直接终止受管后台任务（见「实测校准·工作台启动」）。
+8. **agent 沙箱禁用 nohup 常驻**：nohup 子进程随外层 shell 结束被回收（实测），
+   必须用受管后台任务方式常驻；桌面/WSL 人机环境才可用 nohup。
 
 ## 参考
 

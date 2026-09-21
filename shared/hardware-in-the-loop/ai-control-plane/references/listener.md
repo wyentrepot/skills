@@ -13,6 +13,31 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/listener/stop \
 - `listener:stop` 校验的 resource：在线时为当前 mapping_id（`listener`），离线回退
   `listener-main`；窄授权（`resources` 非 `*`）需两者都包含。
 
+## 离线日志索引（对任意路径日志建索引，离线排查入口）
+
+> 问题归档里的原始 7E 日志（如 `/01-issuse/.../ZTTLOG.txt`）无需拷贝进
+> `data/logs/侦听台/`——直接用网关入口对**任意可读路径**建索引，随后走统一帧查询。
+> 这是离线数据排查的标准入口（使用经验 #5 固化；口径以本节省与 api-contract.md §3.2 为准）。
+
+```bash
+# 1) 建索引（202；body.path 为绝对路径）
+curl -X POST http://127.0.0.1:8790/api/listener/logs/open \
+  -H "Content-Type: application/json" -d '{"path":"/01-issuse/安徽营销双模/ZTTLOG.txt"}'
+
+# 2) 轮询状态直到完成
+curl http://127.0.0.1:8790/api/listener/logs/status
+
+# 3) 查帧（统一帧查询，见下节；index_id 从 status/索引列表取）
+curl "http://127.0.0.1:8790/api/ai/v1/listener/indexes/<index_id>/frames?offset=0&limit=100" \
+  -H "Authorization: Bearer <token>"
+```
+
+- **入口**：`POST /api/listener/logs/open`（8790 网关路径；`/api/logs/open` 是 listener
+  子应用内部裸路径，仅直连 8765 独立版可用——**经 8790 网关会 404**）。
+- **互斥**：串口采集中返回 409，先 `listener/stop` 再建索引。
+- 建索引后 `GET /api/listener/indexes` / `indexes/{id}/frames` 即可用；索引库
+  `apps/listener/runtime/indexes/idx-*.sqlite3` 同时生成，可只读 SQL 直查（offline-analysis.md 数据源表）。
+
 ## 帧查询
 
 ```bash
