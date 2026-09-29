@@ -24,7 +24,7 @@ v2 只有八条公开路径：`capabilities`、`investigations`、`verification-
 1. `GET /api/ai/v2/capabilities`：发现后端和逻辑资源 alias；不要读取或猜测物理 COM 号。
 2. 提交一个任务：观察用 `POST /investigations`，模块控制用 `POST /module-actions`，验证用
    `POST /verification-runs`，烧录用 `POST /flash-jobs`。
-3. `GET /api/ai/v2/jobs/{job_id}?wait_seconds=0`：读取统一状态；GET 不推进任务，也不产生副作用。
+3. `GET /api/ai/v2/jobs/{job_id}`：读取统一状态；可带 `wait_seconds`（≤30）阻塞等待到终态或超时（0=立即返回当前快照）。GET 只轮询快照，不推进任务，也不产生副作用。
 4. 只有需要细节时才调用 `GET /api/ai/v2/jobs/{job_id}/evidence?level=L1|L2|L3`。
 
 示例：一次并行观察模块日志和侦听台历史索引（最多 3 个 observation）：
@@ -374,10 +374,14 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
 # 只等一帧：感知 CCO 主动上报（30 秒内等到 06H-F230 上行即成功）
 curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"recv_only":true,"expect":{"afn":6,"fn":230},"expect_timeout":30}'
+  -d '{"recv_only":true,"expect":{"afn":"06","fn":"F230"},"expect_timeout":30}'
 ```
 
 - `send` 与 `recv_only` 二选一；`expect` / `expect_no_reply` 语义与验证任务 step 一致。
+- **expect 记法（AFN/Fn）**：`afn` 建议 2 位 hex **字符串**（协议记法 10H 写 `"10"`）；
+  数值按原始字节值（0x10 = 16），直接写 `10` 会被当作 0x0A 而静默不匹配。
+  `fn` 写 `"F230"` 或十进制 `230` 均可。帧不匹配时超时原因会带逐帧差异
+  （如 `AFN 不匹配: 期望0x0A, 实际0x10`），据此自纠。
 - 支持 `client_request_id` 幂等（重复提交复用原操作，内容不一致 `409`）。
 
 ### 9.3 会话帧日志查询（本次运行发了什么 / CCO 上报了什么）
@@ -428,6 +432,23 @@ curl http://127.0.0.1:8790/api/simcon/responders
 ```
 
 这两个端点在 simcon 命名空间（`/api/simcon/*`），**不经 /api/ai/v1、无 Bearer 鉴权**。
+
+### 9.6 模拟电表（sim_meter）调测速览（REQS-0035）
+
+模拟电表为 645 从站仿真，service 固定 `simeter`；**AI 平面只读**（v2 能力 `simeter_frames.read`，
+scope `simeter:read`），写操作免 token 直连 `/api/simeter/*`，端点全集以自描述小抄
+`GET /api/simeter/_meta` 为准：
+
+```bash
+curl http://127.0.0.1:8790/api/simeter/_meta        # 端点清单 + 开口序列 + 错误语义
+curl http://127.0.0.1:8790/api/simeter/status       # 电表脑/串口/会话状态
+curl "http://127.0.0.1:8790/api/simeter/frames?limit=50"
+curl -X POST http://127.0.0.1:8790/api/simeter/handle_hex \  # 无串口调测：喂 645 请求帧
+  -H "Content-Type: application/json" -d '{"hex":"68999999999999681104333334334816"}'
+```
+
+易踩点：出厂地址 `000000000001`，对档联调先 `POST /config {"addr":"999999999999"}`；
+WSL pts 不接受 PARENB，虚拟串口/桥接开口一律 `parity="N"`。
 
 ## 10. 协议字典查询（无鉴权）
 

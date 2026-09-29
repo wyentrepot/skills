@@ -1,10 +1,10 @@
 ---
 name: ai-control-plane
-description: Control the HPLC meter-reading workbench over HTTP as an AI, plus an offline app-layer frame toolkit. Frame parse/build/verify (1376.2 nesting 698/645, e.g. 1103 concurrent meter reading) works WITHOUT the workbench via the daily lightweight path; the bounded task facade at /api/ai/v2 covers low-token investigations, module actions, verification, flashing, jobs, and evidence; /api/ai/v1 is retained for expert diagnostics and legacy clients. Use when an AI agent needs to parse/build/verify protocol frames offline or operate the 侦听台改造 workbench (serial ports, flash, log observation, evidence retrieval) programmatically, e.g. "解析这帧 68 开头的报文"、"构一帧 645 读电能"、"用 AI 控制台向 cco/sta 发串口指令"、"AI 烧录固件并等结果"、"AI 观察日志并取证".
-argument-hint: "[task, e.g. 解析这帧报文 / 构一帧645读电能 / 监控cco日志直到出现XX / 烧录固件]"
+description: Control the HPLC meter-reading workbench over HTTP as an AI, plus an offline app-layer frame toolkit. Frame parse/build/verify (1376.2 nesting 698/645, e.g. 1103 concurrent meter reading) works WITHOUT the workbench via the daily lightweight path; the bounded task facade at /api/ai/v2 covers low-token investigations, module actions, verification, flashing, jobs, and evidence; /api/ai/v1 is retained for expert diagnostics and legacy clients; the simulated meter (sim_meter, 645 slave) is driven via /api/simeter/* with a self-describing _meta. Use when an AI agent needs to parse/build/verify protocol frames offline or operate the 侦听台改造 workbench (serial ports, flash, log observation, evidence retrieval, 模拟电表调测) programmatically, e.g. "解析这帧 68 开头的报文"、"构一帧 645 读电能"、"用 AI 控制台向 cco/sta 发串口指令"、"AI 烧录固件并等结果"、"AI 观察日志并取证"、"调测模拟电表 645 应答".
+argument-hint: "[task, e.g. 解析这帧报文 / 构一帧645读电能 / 监控cco日志直到出现XX / 烧录固件 / 调测模拟电表]"
 metadata:
   author: reasonix
-  version: "2.7.0"
+  version: "2.8.0"
   applies-to: 任意工作区（<WORKBENCH_ROOT> 按序单点解析见下文「路径根解析」；本机工作台仓库根登记于 ~/.config/workbench/repo-root，仓库搬家只改该文件）
   source: skill-fc shared/hardware-in-the-loop/ai-control-plane（唯一事实源；各工作区 .agents/skills/ 内的同名副本一律为指向此处的软链接，改动只改这里）
 ---
@@ -35,6 +35,8 @@ v2 不删除 v1；八步细节在下方 v1 references/*.md，完整手册为 `re
 | 监控日志 / 盯帧取证 | references/observations.md | 其余 |
 | 发串口指令 / 烧录固件 | references/module-serial.md | 其余 |
 | 验证用例 / 单步 / 查帧 | references/simcon.md | 其余 |
+| 并发抄表下发 / 档案与 recipe（simcon） | references/simcon.md（batch_read/recipes/archive 段） | 其余 |
+| 模拟电表调测（sim_meter 645 从站） | references/simeter.md（先 `GET /api/simeter/_meta` 自描述） | 其余 |
 | 查已解析帧 / 业务流追踪 | references/listener.md | 其余 |
 | 组网排查（入网/离网/冲突/信标） | references/network-diagnostics.md | 其余 |
 | 离线数据排查 / 漏点定位 | offline-analysis.md（组合场景 +cco-log +listener） | 其余 |
@@ -120,6 +122,14 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
   不可取消红线不变，耐心等到该终态即可。
 - **烧录文件选择**：升级/烧录用 `iap_{cco|ecu}_*.bin`（IAP 串口升级镜像），**禁止用 `flash_*.bin`**
   （生产烧录整片镜像，bootloader 升级路径不认，实测 ~24% 后模块中止）；先读 `firmware/readme.txt`。
+- **expect 记法（AFN/Fn，REQS-0036 修复）**：`afn` 字符串按 2 位 hex（协议记法 10H 写 `"10"`），
+  数值按原始字节值（0x10=16，直接写 `10` = 0x0A 会静默不匹配）；`fn` 写 `"F2"`/`"F230"`/
+  十进制均可（expect 已与 send 同口径归一）。匹配超时原因透出逐帧差异
+  （如 `AFN 不匹配: 期望0x0A, 实际0x10`），据此自纠而不是干等。
+- **v2 job 读取（REQS-0036 修复）**：`GET /api/ai/v2/jobs/{id}?wait_seconds≤30` 现为真阻塞
+  等终态（0=立即返回快照；仅轮询快照，无副作用）。verification_run 终态 summary 带步骤
+  判定（`verification_run succeeded: fail (0 pass/1 fail)` 形式）——`succeeded` 只代表任务
+  跑完，不代表验证通过。
 - **工作台启动**：`python3 <WORKBENCH_ROOT>/apps/workbench/run.py`——任意 cwd 可启动
   （run.py 自动把仓库根/apps/libs 注入 sys.path，不再依赖 cd/PYTHONPATH）。
   **v2 免 token 必带 `WORKBENCH_LOCAL_FULL_ACCESS=1`**（漏掉则 v2 capabilities 直接 401
@@ -142,12 +152,13 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
 | 任务 | 最小调用链 | 任务路径 |
 | --- | --- | --- |
 | 发现后端/逻辑资源 | `capabilities` | `GET /api/ai/v2/capabilities` |
-| 并行观察日志/侦听台/simcon | `investigations` → `jobs/{id}` → `evidence` | `POST /api/ai/v2/investigations` |
+| 并行观察日志/侦听台/simcon/simeter | `investigations` → `jobs/{id}` → `evidence` | `POST /api/ai/v2/investigations` |
 | 发串口指令（cco/sta） | `module-actions` → `jobs/{id}` | `POST /api/ai/v2/module-actions`（action=ensure/send/stop） |
 | 验证用例/单步 | `verification-runs` → `jobs/{id}` → `evidence` | `POST /api/ai/v2/verification-runs` |
 | 烧录固件 | `flash-jobs` → `jobs/{id}` | `POST /api/ai/v2/flash-jobs` |
 | 取消任务 | `jobs/{id}/cancel` → `jobs/{id}` | `POST /api/ai/v2/jobs/{id}/cancel` |
 | 读取任务/证据 | `jobs/{id}` → `jobs/{id}/evidence?level=L1\|L2\|L3` | GET |
+| 模拟电表只读观察 | `_meta` → `status` → `frames`（或 investigations source=simeter） | `GET /api/simeter/_meta`（免 token 直连） |
 
 v2 每次写任务带 `client_request_id`；默认 `cleanup=owned_only`。`job_state` 是执行状态，
 `verdict` 只用于 investigation 观察（module_action/verification_run/flash_job 恒 null）。
@@ -163,6 +174,7 @@ v2 每次写任务带 `client_request_id`；默认 `cleanup=owned_only`。`job_s
 | 发串口指令（cco/sta） | `module-sessions/ensure` → `send`（→ `stop`） | references/module-serial.md |
 | 烧录固件 | `flash-operations` → `wait` | references/module-serial.md |
 | 验证用例 / 单步 / 查帧 | `simcon/verify·step` → `frames` | references/simcon.md |
+| 并发抄表 / 档案 / recipe（直连） | `/api/simcon/batch_read`、`/recipes/{id}/run`、`/archive/query` | references/simcon.md |
 | 查已解析帧 / 追踪一轮业务 | `listener/indexes…/frames`、`listener/traces` | references/listener.md |
 | 排查组网问题（入网/离网/冲突/心跳/信标） | `listener/network/digest`（L1 结论 ≤4KB：verdict+异常清单+时间桶）→ `network/events?level=alarm,watch`（L2 明细，锁定桶窗）→ `network/events/{id}/brief`（L3 单帧粗解 ≤2KB）；评级快照才用 `network/status` | references/network-diagnostics.md |
 | 离线数据排查 / 漏点定位 | **API 优先**：`listener/minute-periods` + `simcon/store/events|snapshots`；原始日志/CCO grep 才离线直查（组合场景，读 3 个） | references/offline-analysis.md（+ cco-log.md + listener.md） |

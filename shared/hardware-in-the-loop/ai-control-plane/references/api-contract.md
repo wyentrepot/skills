@@ -220,6 +220,29 @@ workbench 外部：`/api/indexes/... → /api/listener/indexes/...`；别名路�
 | GET | `/archive/export.xlsx` | — | 导出临时档案为 Excel（FileResponse，落 data/runtime/archive_*.xlsx） | 409 档案为空 |
 | GET | `/online` | `timeout=5.0` | 查在网（10H-F1 网络规模口径） | 504 超时 / 409 串口未打开 |
 
+## 5.1 模拟电表 simeter（`/api/simeter/*`，REQS-0035/0036；三形态同路径）
+
+> **自描述优先**：`GET /_meta` 返回端点全集/开口序列/错误码语义，AI 以响应为准。
+> 写操作不经 /api/ai/v1、免 token；AI 平面只读（v2 `simeter_frames.read`，scope `simeter:read`）。
+
+| 方法 | 路径 | 参数/请求体 | 响应要点 | 状态码 |
+| --- | --- | --- | --- | --- |
+| GET | `/_meta` | — | `{service, endpoints{}, open_sequence[], errors{}, notes[]}` 自描述小抄 | 200 |
+| GET | `/status` | — | `{brain{addr,version,baudrate,…,rx_count,tx_count}, serial, session}` | 200 |
+| GET | `/ports` | — | 本机串口枚举 `{ports, port_details}` | 200 |
+| POST | `/open` | `{mapping_id?`（工作台模式支持 listener）`| port?, baudrate?, parity?, …}`；注册表防双开 | `{open:true,…}`；409 已打开/被占用 | 409 |
+| POST | `/close` | — | 释放串口并解除资源注册 | 200 |
+| POST | `/baud` | `{baudrate}` | 17H 波特率热切换 | 200 / 422 |
+| GET/POST | `/config` | 读 / 改 `{addr, version(07\|97), baudrate, parity, …}` | 出厂 addr=000000000001，对档联调先设为档案地址 | 200 / 400 |
+| GET/POST | `/data` | 读 / 设 `{di（显示序 00010000）, value, scale（小数位）}` | 数据标识项 | 200 / 400 |
+| POST | `/clock` | `{time:"YYYY-MM-DD HH:MM:SS"}` | 设置表内时钟 | 200 / 400 |
+| GET/POST | `/jzjc`；POST `/jzjc/report` | 重庆即装即采配置；`{style:"sta"\|"afn06f7"}` 生成上送报文 | 配置 / 报文 hex | 200 / 400 |
+| POST | `/handle_hex` | `{hex}` 645 请求帧 | **无串口调测**：`{reply_hex, reply_wire_hex, note{…}}`；地址不符 `reply_hex:null` + note.mine=false | 200 |
+| POST | `/send_hex` | `{hex}` | 串口打开时注入原始帧 | 200 / 409 |
+| GET | `/frames` | `dir=rx\|tx\|event?, after_seq, limit` | `{session, entries[]}`（会话帧日志） | 200 |
+
+- 环境注记：WSL pts 不接受 PARENB，经虚拟串口/桥接开口一律 `parity="N"`（线参由对端决定）。
+
 ## 6. AI 任务门面 v2（默认 AI 调用面）
 
 v2 将“查状态、并行观察、模块动作、验证、烧录、取证”收敛为任务级工作流。AI

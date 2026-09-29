@@ -20,7 +20,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 - 响应里的 `token` **只返回一次**（服务端只存 SHA-256 摘要）——务必保存，AI 全程只用 token。
 - 503 = admin key 未配置/没重启；403 = key 错或非本机发起。
 
-## scope → 能力映射（13 种）
+## scope → 能力映射（14 种）
 
 | scope | 能力 | 典型任务 |
 | --- | --- | --- |
@@ -33,6 +33,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 | observation:create | 建观察、取消操作 | 监控日志/盯帧 |
 | evidence:read | 操作/证据/帧/追踪读取 | 取证、查帧（监控行也必需） |
 | simcon:verify / simcon:send / simcon:read | 验证任务 / 单步·开关串口 / 帧日志读 | 跑验证用例 |
+| simeter:read | 模拟电表状态/帧日志只读（v2 `simeter_frames.read`） | 模拟电表调测观察（写操作免 token 直连 /api/simeter/*） |
 
 ## 管理辅助
 

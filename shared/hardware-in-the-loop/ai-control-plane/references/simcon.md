@@ -30,8 +30,13 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
 # 只等一帧：感知 CCO 主动上报
 curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
-  -d '{"recv_only":true,"expect":{"afn":6,"fn":230},"expect_timeout":30}'
+  -d '{"recv_only":true,"expect":{"afn":"06","fn":"F230"},"expect_timeout":30}'
 ```
+
+- **expect 记法（AFN/Fn，REQS-0036）**：`afn` 用 2 位 hex **字符串**（协议记法 10H 写
+  `"10"`；数值按原始字节值 0x10=16，直接写 `10` = 0x0A 会静默不匹配）；`fn` 写
+  `"F230"` / `"F2"` / 十进制均可。超时原因透出逐帧不匹配差异（如
+  `AFN 不匹配: 期望0x0A, 实际0x10`），据此自纠。
 
 ## 查询本次运行的帧
 
@@ -77,3 +82,32 @@ curl "http://127.0.0.1:8790/api/ai/v1/simcon/store/snapshots/1" \
 - 响应信封 `{"items":[...]}`；用于排查 06H 上报是否落库、下发查询结果快照。
 - 与 `/simcon/frames`（会话帧日志 sc-*.jsonl，实时）互补：store 是**持久化库**，
   跨会话保留（按天滚动 5 天），frames 是本次会话的帧序列。
+
+## 并发抄表 / 档案 / recipes（REQS-0027/0028/0030，无 Bearer 直连面）
+
+> 这组在 `/api/simcon/*` 命名空间（不经 /api/ai/v1、无 token）；契约细节见
+> `references/api-contract.md` §5。
+
+```bash
+# 并发抄表滑窗任务（10H-F2 档案 + 14H-F1 下发；回快照）
+curl -X POST http://127.0.0.1:8790/api/simcon/batch_read \
+  -H "Content-Type: application/json" \
+  -d '{"meters":["999999999999","020103040506"],"max_concurrent":5,"mode":"batch","protocol_type":2}'
+# 任务快照：{job_id, meters_total, max_concurrent, in_flight, queued, done,
+#            success, failed, deny_breakdown, finished, rows[]}
+curl http://127.0.0.1:8790/api/simcon/batch_read/<job_id>      # 单任务快照
+curl -X POST http://127.0.0.1:8790/api/simcon/batch_read/<job_id>/stop   # 停止
+
+# 常用任务一键 recipe（清空/添加档案等；参数见 GET /recipes）
+curl http://127.0.0.1:8790/api/simcon/recipes
+curl -X POST http://127.0.0.1:8790/api/simcon/recipes/add_archive/run \
+  -H "Content-Type: application/json" -d '{"overrides":{}}'
+
+# 档案 / 在网查询（10H-F2 / 10H-F1 实时下发）
+curl "http://127.0.0.1:8790/api/simcon/archive/query?start=0&count=200"
+curl http://127.0.0.1:8790/api/simcon/online
+
+# 统计面：主动上报分桶（06H F1-F5+停复电）与并发抄表周期统计
+curl http://127.0.0.1:8790/api/simcon/report_buckets
+curl "http://127.0.0.1:8790/api/simcon/batch/stats?period=15m"
+```
