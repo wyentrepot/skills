@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bot 团队架构 — 现状 vs 方案 A vs 方案 B</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --panel2: #1e2230;
+    --line: #2c3245;
+    --txt: #e6e9f2;
+    --sub: #9aa3b8;
+    --chief: #f5a623;
+    --owner: #4fc3f7;
+    --member: #81c784;
+    --user: #e57373;
+    --ghost: #61677d;
+    --flow: #7986cb;
+    --bad: #ef5350;
+    --good: #66bb6a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--txt);
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    padding: 28px 20px 60px; line-height: 1.5;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .meta { color: var(--sub); font-size: 13px; margin-bottom: 24px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tab {
+    padding: 8px 16px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--sub); cursor: pointer; font-size: 14px;
+  }
+  .tab.active { background: var(--panel2); color: var(--txt); border-color: var(--flow); }
+  .view { display: none; }
+  .view.active { display: block; }
+  .canvas {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 22px; overflow-x: auto;
+  }
+  svg { display: block; min-width: 760px; width: 100%; height: auto; }
+  .note {
+    margin-top: 14px; font-size: 13.5px; color: var(--sub);
+    background: var(--panel2); border-radius: 8px; padding: 12px 16px;
+    border-left: 3px solid var(--flow);
+  }
+  .note b { color: var(--txt); }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--sub); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dash { width: 22px; height: 0; border-top: 2px dashed var(--ghost); display: inline-block; }
+  .solid { width: 22px; height: 0; border-top: 2px solid var(--flow); display: inline-block; }
+</style>
+</head>
+<body>
+<h1>Bot 团队架构 — 现状 / 方案 A / 方案 B</h1>
+<div class="meta">依据 ds-bot v0.1.5 源码 · 2026-10-14 · 配套文档：07-上下文治理.md</div>
+
+<div class="tabs">
+  <button class="tab active" data-v="v0">现状（问题态）</button>
+  <button class="tab" data-v="va">方案 A（治理叠加）</button>
+  <button class="tab" data-v="vb">方案 B（群自治·薄层 Chief）</button>
+</div>
+
+<!-- ============ 现状 ============ -->
+<div class="view active" id="v0">
+<div class="canvas">
+<svg viewBox="0 0 780 560" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7986cb"/></marker>
+    <marker id="arb" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#ef5350"/></marker>
+  </defs>
+
+  <!-- user -->
+  <rect x="300" y="16" width="180" height="52" rx="10" fill="#2a1e22" stroke="#e57373"/>
+  <text x="390" y="38" text-anchor="middle" fill="#e57373" font-size="15" font-weight="bold">你（老板）</text>
+  <text x="390" y="56" text-anchor="middle" fill="#9aa3b8" font-size="11">所有事都先说给 Chief</text>
+
+  <!-- chief -->
+  <rect x="290" y="120" width="200" height="66" rx="10" fill="#2b2213" stroke="#f5a623" stroke-width="1.6"/>
+  <text x="390" y="144" text-anchor="middle" fill="#f5a623" font-size="15" font-weight="bold">Chief（Main Bot）</text>
+  <text x="390" y="162" text-anchor="middle" fill="#9aa3b8" font-size="11">派工枢纽 + 群管理员 + 亲自干重活</text>
+  <text x="390" y="178" text-anchor="middle" fill="#ef5350" font-size="10.5">⚠ 一条会话混装全部任务线</text>
+
+  <line x1="390" y1="68" x2="390" y2="118" stroke="#7986cb" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="400" y="98" fill="#7986cb" font-size="11">需求 · 派工 · 汇报 全经此</text>
+
+  <!-- members -->
+  <rect x="60"  y="250" width="150" height="58" rx="10" fill="#16211a" stroke="#81c784"/>
+  <text x="135" y="274" text-anchor="middle" fill="#81c784" font-size="13.5" font-weight="bold">研发组长</text>
+  <text x="135" y="292" text-anchor="middle" fill="#9aa3b8" font-size="10.5">等 Chief 派活</text>
+  <rect x="240" y="250" width="150" height="58" rx="10" fill="#16211a" stroke="#81c784"/>
+  <text x="315" y="274" text-anchor="middle" fill="#81c784" font-size="13.5" font-weight="bold">开发</text>
+  <text x="315" y="292" text-anchor="middle" fill="#9aa3b8" font-size="10.5">等 Chief 派活</text>
+  <rect x="420" y="250" width="150" height="58" rx="10" fill="#16211a" stroke="#81c784"/>
+  <text x="495" y="274" text-anchor="middle" fill="#81c784" font-size="13.5" font-weight="bold">项目经理</text>
+  <text x="495" y="292" text-anchor="middle" fill="#9aa3b8" font-size="10.5">等 Chief 派活</text>
+  <rect x="600" y="250" width="150" height="58" rx="10" fill="#16211a" stroke="#81c784"/>
+  <text x="675" y="274" text-anchor="middle" fill="#81c784" font-size="13.5" font-weight="bold">其他成员 ×4</text>
+  <text x="675" y="292" text-anchor="middle" fill="#9aa3b8" font-size="10.5">等 Chief 派活</text>
+
+  <line x1="330" y1="186" x2="180" y2="248" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="390" y1="186" x2="330" y2="248" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="410" y1="186" x2="470" y2="248" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="450" y1="186" x2="650" y2="248" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="252" y="216" fill="#7986cb" font-size="11">派工</text>
+  <text x="500" y="216" fill="#7986cb" font-size="11">派工</text>
+
+  <!-- groups -->
+  <rect x="80" y="380" width="280" height="120" rx="12" fill="#141a26" stroke="#2c3245" stroke-dasharray="5 4"/>
+  <text x="220" y="404" text-anchor="middle" fill="#9aa3b8" font-size="12.5" font-weight="bold">群：缺陷排查组（admin=Chief）</text>
+  <rect x="104" y="418" width="105" height="40" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="156" y="443" text-anchor="middle" fill="#4fc3f7" font-size="12">研发组长</text>
+  <rect x="222" y="418" width="105" height="40" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="274" y="443" text-anchor="middle" fill="#4fc3f7" font-size="12">工程管理</text>
+  <text x="220" y="486" text-anchor="middle" fill="#61677d" font-size="10.5">独立上下文 ✓ 但大小事仍要Chief点头</text>
+
+  <rect x="420" y="380" width="280" height="120" rx="12" fill="#141a26" stroke="#2c3245" stroke-dasharray="5 4"/>
+  <text x="560" y="404" text-anchor="middle" fill="#9aa3b8" font-size="12.5" font-weight="bold">群：CCO换SDK（admin=Chief）</text>
+  <rect x="444" y="418" width="105" height="40" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="496" y="443" text-anchor="middle" fill="#4fc3f7" font-size="12">开发</text>
+  <rect x="562" y="418" width="105" height="40" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="614" y="443" text-anchor="middle" fill="#4fc3f7" font-size="12">调研官</text>
+  <text x="560" y="486" text-anchor="middle" fill="#61677d" font-size="10.5">独立上下文 ✓ 但大小事仍要Chief点头</text>
+
+  <line x1="360" y1="186" x2="240" y2="378" stroke="#ef5350" stroke-width="1.4" stroke-dasharray="6 4" marker-end="url(#arb)"/>
+  <line x1="430" y1="186" x2="545" y2="378" stroke="#ef5350" stroke-width="1.4" stroke-dasharray="6 4" marker-end="url(#arb)"/>
+  <text x="228" y="330" fill="#ef5350" font-size="11">既当管理员又当传话筒</text>
+
+  <!-- problem notes -->
+  <rect x="60" y="70" width="200" height="96" rx="10" fill="#231417" stroke="#ef5350" stroke-dasharray="4 3"/>
+  <text x="160" y="92" text-anchor="middle" fill="#ef5350" font-size="12.5" font-weight="bold">四个病灶</text>
+  <text x="72" y="112" fill="#c9cbd4" font-size="11">① 一条会话混装多任务线</text>
+  <text x="72" y="130" fill="#c9cbd4" font-size="11">② Chief 亲自翻源码做考证</text>
+  <text x="72" y="148" fill="#c9cbd4" font-size="11">③ 群里大小事经 Chief 转述</text>
+  <text x="72" y="166" fill="#c9cbd4" font-size="11">④ 上下文只涨不清（没到80%）</text>
+</svg>
+</div>
+<div class="note"><b>现状</b>：Chief 同时扮演三个角色——你的唯一入口、群管理员、干活的人。三股信息流全部灌进它的一条会话，这是上下文污染的根源。群虽然上下文独立，但 admin 是 Chief，决策仍向它集中。</div>
+</div>
+
+<!-- ============ 方案 A ============ -->
+<div class="view" id="va">
+<div class="canvas">
+<svg viewBox="0 0 780 560" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7986cb"/></marker>
+  </defs>
+
+  <rect x="300" y="16" width="180" height="52" rx="10" fill="#2a1e22" stroke="#e57373"/>
+  <text x="390" y="38" text-anchor="middle" fill="#e57373" font-size="15" font-weight="bold">你（老板）</text>
+  <text x="390" y="56" text-anchor="middle" fill="#9aa3b8" font-size="11">入口不变，Chief 仍全权</text>
+
+  <rect x="280" y="110" width="220" height="86" rx="10" fill="#2b2213" stroke="#f5a623" stroke-width="1.6"/>
+  <text x="390" y="132" text-anchor="middle" fill="#f5a623" font-size="15" font-weight="bold">Chief（Main Bot）</text>
+  <text x="390" y="150" text-anchor="middle" fill="#9aa3b8" font-size="11">派工枢纽不变，但会话被治理：</text>
+  <text x="390" y="167" text-anchor="middle" fill="#81c784" font-size="10.5">✓ 两层记忆（职业常驻+项目recall）</text>
+  <text x="390" y="183" text-anchor="middle" fill="#81c784" font-size="10.5">✓ work_dir 换代清空过程痕迹</text>
+
+  <line x1="390" y1="68" x2="390" y2="108" stroke="#7986cb" stroke-width="2" marker-end="url(#ar2)"/>
+  <text x="400" y="92" fill="#7986cb" font-size="11">需求 · 汇报（全部经 Chief）</text>
+
+  <!-- memory layer -->
+  <rect x="560" y="96" width="190" height="112" rx="10" fill="#132029" stroke="#4fc3f7" stroke-dasharray="5 3"/>
+  <text x="655" y="117" text-anchor="middle" fill="#4fc3f7" font-size="12" font-weight="bold">Chief 的记忆（跨会话）</text>
+  <text x="572" y="137" fill="#c9cbd4" font-size="10.5">MEMORY.md = 职业记忆（常驻）</text>
+  <text x="572" y="154" fill="#c9cbd4" font-size="10.5">　＋项目 Index 目录</text>
+  <text x="572" y="171" fill="#c9cbd4" font-size="10.5">topic 文件 = 项目记忆（recall）</text>
+  <text x="572" y="188" fill="#c9cbd4" font-size="10.5">　cqt-sta-* / cco-sdk-* / …</text>
+  <line x1="560" y1="152" x2="502" y2="150" stroke="#4fc3f7" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+
+  <!-- sessions -->
+  <rect x="60" y="96" width="180" height="112" rx="10" fill="#132029" stroke="#66bb6a" stroke-dasharray="5 3"/>
+  <text x="150" y="117" text-anchor="middle" fill="#66bb6a" font-size="12" font-weight="bold">会话层（可换代）</text>
+  <text x="72" y="137" fill="#c9cbd4" font-size="10.5">part 1（归档）→ part 2 → …</text>
+  <text x="72" y="154" fill="#c9cbd4" font-size="10.5">work_dir 一变 = 新会话</text>
+  <text x="72" y="171" fill="#c9cbd4" font-size="10.5">交接笔记 + 最近消息 过场</text>
+  <text x="72" y="188" fill="#c9cbd4" font-size="10.5">80%/95% 水位线兜底</text>
+  <line x1="240" y1="152" x2="278" y2="150" stroke="#66bb6a" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+
+  <!-- members -->
+  <rect x="90" y="256" width="600" height="56" rx="10" fill="#16211a" stroke="#81c784"/>
+  <text x="390" y="279" text-anchor="middle" fill="#81c784" font-size="13.5" font-weight="bold">成员们（研发组长 · 开发 · 项目经理 · …）</text>
+  <text x="390" y="298" text-anchor="middle" fill="#9aa3b8" font-size="10.5">重活全部派出去；Chief 只留决策线</text>
+
+  <line x1="330" y1="196" x2="250" y2="254" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar2)"/>
+  <line x1="450" y1="196" x2="530" y2="254" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar2)"/>
+  <text x="270" y="228" fill="#7986cb" font-size="11">派工</text>
+  <text x="472" y="228" fill="#7986cb" font-size="11">结论回流（短）</text>
+
+  <!-- groups + reqmgmt -->
+  <rect x="90" y="370" width="600" height="130" rx="12" fill="#141a26" stroke="#2c3245" stroke-dasharray="5 4"/>
+  <text x="390" y="394" text-anchor="middle" fill="#9aa3b8" font-size="12.5" font-weight="bold">群（主题隔离，上下文独立）＋ req-mgmt 需求目录</text>
+  <rect x="116" y="408" width="160" height="44" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="196" y="428" text-anchor="middle" fill="#4fc3f7" font-size="11.5">缺陷排查组</text>
+  <text x="196" y="444" text-anchor="middle" fill="#61677d" font-size="10">reqs/0001-*/</text>
+  <rect x="296" y="408" width="160" height="44" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="376" y="428" text-anchor="middle" fill="#4fc3f7" font-size="11.5">CCO换SDK</text>
+  <text x="376" y="444" text-anchor="middle" fill="#61677d" font-size="10">reqs/0002-*/</text>
+  <rect x="476" y="408" width="190" height="44" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="571" y="428" text-anchor="middle" fill="#4fc3f7" font-size="11.5">未来新项目群…</text>
+  <text x="571" y="444" text-anchor="middle" fill="#61677d" font-size="10">一个需求一个目录</text>
+  <text x="390" y="480" text-anchor="middle" fill="#9aa3b8" font-size="10.5">切换 = 读索引 + recall topic +（长线才）work_dir 换代　·　三层各管一段：需求事实(req-mgmt) / 项目知识(topic) / 过程痕迹(会话)</text>
+</svg>
+</div>
+<div class="note"><b>方案 A</b>：权限结构不动，Chief 仍是唯一入口和派工枢纽；治的是它自己的上下文——两层记忆管知识，work_dir 换代管过程痕迹，req-mgmt 管需求事实。纪律成本高：靠"重活派出去"的自觉。</div>
+</div>
+
+<!-- ============ 方案 B ============ -->
+<div class="view" id="vb">
+<div class="canvas">
+<svg viewBox="0 0 780 580" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ar3" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#7986cb"/></marker>
+    <marker id="arg" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#81c784"/></marker>
+    <marker id="ary" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#f5a623"/></marker>
+  </defs>
+
+  <rect x="300" y="14" width="180" height="50" rx="10" fill="#2a1e22" stroke="#e57373"/>
+  <text x="390" y="35" text-anchor="middle" fill="#e57373" font-size="15" font-weight="bold">你（老板）</text>
+  <text x="390" y="53" text-anchor="middle" fill="#9aa3b8" font-size="11">需求直接进群，一手资料直接看</text>
+
+  <!-- chief thin layer -->
+  <rect x="40" y="14" width="200" height="86" rx="10" fill="#2b2213" stroke="#f5a623" stroke-width="1.6"/>
+  <text x="140" y="36" text-anchor="middle" fill="#f5a623" font-size="14.5" font-weight="bold">Chief = 升级通道 + 组织管理</text>
+  <text x="52" y="55" fill="#c9cbd4" font-size="10.5">① 转达：负责人无法抉择 → 转呈你 → 回传结果</text>
+  <text x="52" y="71" fill="#c9cbd4" font-size="10.5">② 组织维护：建/改/停 Bot、模型、建群任命</text>
+  <text x="52" y="87" fill="#c9cbd4" font-size="10.5">③ 你缺席时的常驻代表 + 跨群仲裁</text>
+  <text x="52" y="104" fill="#ef5350" font-size="10">✗ 只传决策不传过程 ✗ 不派工 ✗ 不当群admin</text>
+
+  <!-- three groups -->
+  <rect x="70" y="150" width="200" height="176" rx="12" fill="#141a26" stroke="#4fc3f7" stroke-width="1.4"/>
+  <text x="170" y="173" text-anchor="middle" fill="#4fc3f7" font-size="13" font-weight="bold">群：重庆 STA</text>
+  <rect x="88" y="186" width="164" height="42" rx="8" fill="#12212b" stroke="#4fc3f7"/>
+  <text x="170" y="204" text-anchor="middle" fill="#4fc3f7" font-size="12" font-weight="bold">★ 负责人（群admin）</text>
+  <text x="170" y="220" text-anchor="middle" fill="#9aa3b8" font-size="10">需求理解·拆分·进度·对你汇报</text>
+  <rect x="88" y="236" width="76" height="34" rx="7" fill="#1e2230" stroke="#81c784"/>
+  <text x="126" y="257" text-anchor="middle" fill="#81c784" font-size="11">组员</text>
+  <rect x="172" y="236" width="76" height="34" rx="7" fill="#1e2230" stroke="#81c784"/>
+  <text x="210" y="257" text-anchor="middle" fill="#81c784" font-size="11">组员</text>
+  <text x="170" y="292" text-anchor="middle" fill="#61677d" font-size="10">群work_dir=项目目录</text>
+  <text x="170" y="308" text-anchor="middle" fill="#61677d" font-size="10">方案A三层治理在此运行</text>
+
+  <rect x="290" y="150" width="200" height="176" rx="12" fill="#141a26" stroke="#4fc3f7" stroke-width="1.4"/>
+  <text x="390" y="173" text-anchor="middle" fill="#4fc3f7" font-size="13" font-weight="bold">群：CCO换SDK</text>
+  <rect x="308" y="186" width="164" height="42" rx="8" fill="#12212b" stroke="#4fc3f7"/>
+  <text x="390" y="204" text-anchor="middle" fill="#4fc3f7" font-size="12" font-weight="bold">★ 负责人（群admin）</text>
+  <text x="390" y="220" text-anchor="middle" fill="#9aa3b8" font-size="10">需求理解·拆分·进度·对你汇报</text>
+  <rect x="308" y="236" width="76" height="34" rx="7" fill="#1e2230" stroke="#81c784"/>
+  <text x="346" y="257" text-anchor="middle" fill="#81c784" font-size="11">组员</text>
+  <rect x="392" y="236" width="76" height="34" rx="7" fill="#1e2230" stroke="#81c784"/>
+  <text x="430" y="257" text-anchor="middle" fill="#81c784" font-size="11">组员</text>
+  <text x="390" y="292" text-anchor="middle" fill="#61677d" font-size="10">群work_dir=项目目录</text>
+  <text x="390" y="308" text-anchor="middle" fill="#61677d" font-size="10">方案A三层治理在此运行</text>
+
+  <rect x="510" y="150" width="200" height="176" rx="12" fill="#141a26" stroke="#4fc3f7" stroke-width="1.4"/>
+  <text x="610" y="173" text-anchor="middle" fill="#4fc3f7" font-size="13" font-weight="bold">群：新需求…</text>
+  <rect x="528" y="186" width="164" height="42" rx="8" fill="#12212b" stroke="#4fc3f7"/>
+  <text x="610" y="204" text-anchor="middle" fill="#4fc3f7" font-size="12" font-weight="bold">★ 负责人（群admin）</text>
+  <text x="610" y="220" text-anchor="middle" fill="#9aa3b8" font-size="10">建群时由 Chief 指定</text>
+  <rect x="528" y="236" width="76" height="34" rx="7" fill="#1e2230" stroke="#81c784"/>
+  <text x="566" y="257" text-anchor="middle" fill="#81c784" font-size="11">组员</text>
+  <rect x="612" y="236" width="76" height="34" rx="7" fill="#1e2230" stroke="#81c784"/>
+  <text x="650" y="257" text-anchor="middle" fill="#81c784" font-size="11">组员</text>
+  <text x="610" y="292" text-anchor="middle" fill="#61677d" font-size="10">按需新建</text>
+  <text x="610" y="308" text-anchor="middle" fill="#61677d" font-size="10">Chief 建群+任命后退出</text>
+
+  <!-- user direct lines -->
+  <line x1="360" y1="64" x2="195" y2="148" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar3)"/>
+  <line x1="390" y1="64" x2="390" y2="148" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar3)"/>
+  <line x1="420" y1="64" x2="585" y2="148" stroke="#7986cb" stroke-width="1.8" marker-end="url(#ar3)"/>
+  <text x="250" y="105" fill="#7986cb" font-size="11">直达</text>
+  <text x="500" y="105" fill="#7986cb" font-size="11">直达</text>
+
+  <!-- chief arrows -->
+  <path d="M 140 100 C 120 128, 130 170, 155 210" fill="none" stroke="#f5a623" stroke-width="1.3" stroke-dasharray="5 4" marker-end="url(#ary)"/>
+  <text x="66" y="128" fill="#f5a623" font-size="10">升级转达/仲裁/建Bot</text>
+  <!-- relay round-trip: owner -> chief -> user -->
+  <path d="M 160 228 C 100 240, 60 200, 88 104" fill="none" stroke="#f5a623" stroke-width="1.2" stroke-dasharray="3 3" marker-end="url(#ary)"/>
+  <text x="18" y="168" fill="#f5a623" font-size="9.5" transform="rotate(-78 30 168)">转呈↓回传</text>
+
+  <!-- owner to owner -->
+  <path d="M 272 206 C 285 196, 295 196, 306 206" fill="none" stroke="#81c784" stroke-width="1.6" marker-end="url(#arg)"/>
+  <path d="M 492 206 C 505 196, 515 196, 526 206" fill="none" stroke="#81c784" stroke-width="1.6" marker-end="url(#arg)"/>
+  <text x="390" y="345" text-anchor="middle" fill="#81c784" font-size="11">跨群协作 = 负责人 ↔ 负责人（message_bot），不经 Chief</text>
+
+  <!-- files layer -->
+  <rect x="70" y="372" width="640" height="128" rx="12" fill="#141a26" stroke="#2c3245" stroke-dasharray="5 4"/>
+  <text x="390" y="396" text-anchor="middle" fill="#9aa3b8" font-size="12.5" font-weight="bold">共享底座（文件与记忆，全团队同一套协议）</text>
+  <rect x="96" y="410" width="180" height="40" rx="8" fill="#1e2230" stroke="#81c784"/>
+  <text x="186" y="428" text-anchor="middle" fill="#81c784" font-size="11">req-mgmt：reqs/&lt;id&gt;/ 四件套</text>
+  <text x="186" y="443" text-anchor="middle" fill="#61677d" font-size="10">需求基线·版本·只追加</text>
+  <rect x="296" y="410" width="180" height="40" rx="8" fill="#1e2230" stroke="#4fc3f7"/>
+  <text x="386" y="428" text-anchor="middle" fill="#4fc3f7" font-size="11">记忆 topic：&lt;项目&gt;-* 索引+recall</text>
+  <text x="386" y="443" text-anchor="middle" fill="#61677d" font-size="10">项目知识跨会话延续</text>
+  <rect x="496" y="410" width="188" height="40" rx="8" fill="#1e2230" stroke="#f5a623"/>
+  <text x="590" y="428" text-anchor="middle" fill="#f5a623" font-size="11">PROJECT-CARD / projects.md</text>
+  <text x="590" y="443" text-anchor="middle" fill="#61677d" font-size="10">项目档案·写权白名单</text>
+  <text x="390" y="478" text-anchor="middle" fill="#9aa3b8" font-size="10.5">决策门（立项/选型/变更）→ 群内 ask_user 过你批准 → 重大变更抄送 Chief 留档</text>
+
+  <!-- escalation note -->
+  <rect x="70" y="516" width="640" height="44" rx="8" fill="#231417" stroke="#ef5350" stroke-dasharray="4 3"/>
+  <text x="390" y="534" text-anchor="middle" fill="#ef5350" font-size="11.5" font-weight="bold">升级路径：群内解决 → 跨群冲突 → Chief 仲裁/转达你 → 你拍板 → 结果经 Chief 回群</text>
+  <text x="390" y="551" text-anchor="middle" fill="#9aa3b8" font-size="10.5">Chief 只在③⑤出现，且只传"决策请求+答复"，过程永远留在群里</text>
+</svg>
+</div>
+<div class="note"><b>方案 B（升级通道版）</b>：需求直达群，负责人(admin)对你负责；日常 Chief 完全不在链路里。负责人遇到<b>无法抉择的事项</b>时，Chief 充当<b>升级转达通道</b>——把决策请求（问题/选项/建议）转呈给你，把你的审核结果带回群，只传决策不传过程。其余职能：组织维护（建/改/停 Bot、模型）、你缺席时的常驻代表、跨群仲裁。</div>
+</div>
+
+<div class="legend">
+  <span><span class="dot" style="background:var(--user)"></span>你（用户）</span>
+  <span><span class="dot" style="background:var(--chief)"></span>Chief / 决策</span>
+  <span><span class="dot" style="background:var(--owner)"></span>负责人 / 群</span>
+  <span><span class="dot" style="background:var(--member)"></span>执行成员</span>
+  <span><span class="solid"></span>需求/汇报流</span>
+  <span><span class="dash"></span>治理/仲裁</span>
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active')});
+    document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});
+    t.classList.add('active');
+    document.getElementById(t.dataset.v).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

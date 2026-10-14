@@ -47,6 +47,8 @@ description: DS Bot（DeepSeek Harness 的 Bot 团队插件）的设计意图、
 | `04-Bot合规体检-2026-10-13.md` | 一次真实体检：逐个体检表、8 条发现分级、修复与复验 |
 | `05-设计理念-当前.md` | 四个层次、八条原则、边界与未解决 |
 | `06-记忆治理.md` | 记忆的文件布局、插件的四件套机制、防不住的七点、治理补充 |
+| `07-上下文治理.md` | **主 bot 防污染与切换协议**：会话与记忆是两套存储、`work_dir` 换代（交接笔记 + 旧 part 归档）、双水位线与上下文管家、方案 A / 方案 B（群自治，Chief 架空为升级通道）、Chief 岗位卡定稿文本、落地清单与体检项 |
+| `架构图-现状与方案AB.html` | 方案 A / 方案 B 的架构图（可视化对照） |
 
 ## 脚本
 
@@ -54,6 +56,10 @@ description: DS Bot（DeepSeek Harness 的 Bot 团队插件）的设计意图、
 # 团队合规体检（默认读 $DSH_HOME 或 ~/.dsh；DSH_HOME 未设时用 <home>/bot）
 node scripts/audit-bots.js
 node scripts/audit-bots.js --home "C:/Users/<you>/.dsh" --json audit.json
+
+# 上下文治理落地体检（只读）：群 admin 是否已交负责人、群 work_dir 是否指向项目目录、
+# Chief 岗位卡五段与"不进执行链路"、负责人岗位卡四要素升级与直接汇报
+node scripts/check-governance.mjs
 ```
 
 检查项：Bot 数量与角色、`role`/`name` 长度、`instructions` 的五段完整性、项目事实泄漏（绝对路径、项目目录名、数据源/编排器专名、验收编号等）、模型分布、群成员与管理员、记忆目录与 topic 落位。
