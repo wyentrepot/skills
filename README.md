@@ -16,6 +16,7 @@ skills/
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
 ├── dsh/             # 仅 DeepSeek Harness (DSH) 使用的技能（superpowers-dsh 移植包）
+├── ds_bot/          # Bot 团队的设计与变更策略（ds-bot 插件，跨环境）
 ├── scripts/         # 工具级安装脚本（不属于任何技能）
 │   ├── install-kilo.sh        # WSL 下将技能链接到 ~/.kilo/skills
 │   ├── install-reasonix.sh    # Win 下将技能注册到 ~/.reasonix/config.toml
