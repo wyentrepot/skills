@@ -16,7 +16,6 @@ skills/
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
 ├── dsh/             # 仅 DeepSeek Harness (DSH) 使用的技能（superpowers-dsh 移植包）
-├── ds_bot/          # DS Bot 团队治理：设计意图、岗位/项目分层、新建 Bot 检查清单、记忆治理与体检脚本
 ├── scripts/         # 工具级安装脚本（不属于任何技能）
 │   ├── install-kilo.sh        # WSL 下将技能链接到 ~/.kilo/skills
 │   ├── install-reasonix.sh    # Win 下将技能注册到 ~/.reasonix/config.toml
@@ -125,14 +124,6 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `using-git-worktrees` | 需要隔离工作空间时 |
 | `writing-skills` | 编写/测试 DSH skill |
 
-### DS Bot 技能（`ds_bot/`）
-
-> DS Bot（dsh 的 Bot 团队插件）治理。依据 `ds-bot` v0.1.4 源码检查与一次真实团队体检。
-
-| 名称 | 说明 |
-|------|------|
-| `ds_bot` | 管一台 DSH 上的 Bot 团队：岗位不绑项目、项目按需加载、新建 Bot 过五段模板与检查清单、记忆分层治理、定期合规体检（`scripts/audit-bots.js`，退出码可入 CI）。 |
-
 ### 共享技能（shared/）
 
 #### 研发流程（`shared/development-process/`）
@@ -188,7 +179,6 @@ description: <一句话描述>
 - **所有环境共用** → `shared/<能力域>/<技能名>/SKILL.md`
 - **仅 Kilo (WSL)** → `kilo/<技能名>/SKILL.md`
 - **仅 Reasonix (Win)** → `reasonix/<技能名>/SKILL.md`
-- **仅 DS Bot 团队治理** → `ds_bot/<技能名>/SKILL.md`（不参与 `install-dsh.sh` 的复制，需单独取用）
 
 ### 技能自身依赖的脚本
 
