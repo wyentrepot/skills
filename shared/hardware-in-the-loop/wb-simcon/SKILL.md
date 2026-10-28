@@ -285,6 +285,51 @@ curl http://127.0.0.1:8790/api/simcon/responders
 
 > 来源：references/operation-guide.md:346-349,363-365；references/api-contract.md:51-62,195-222；references/simcon.md:9-12,26；references/serial-bridge.md:104；REQS.md:31（P1-1 需求口径，未实现）
 
+## 11. 档案区与 15 分钟搜表（2026-10-28 落地）
+
+**档案区 = 一张表，是"添加从节点/设备池"的唯一真相源**（人工可维护，Excel 直接开）：
+
+```
+<WORKBENCH_ROOT>/data/archive/device-pool.tsv
+列：从节点地址 / 协议类型 / 设备类型 / 来源 / 首次发现 / 最近发现 / 出现次数 / 备注
+```
+
+工具 `tools/scripts/archive_pool.py`：
+```bash
+python3 tools/scripts/archive_pool.py list                       # 看现有档案
+python3 tools/scripts/archive_pool.py add --addr 066110000066 --proto 02 --dtype 01 --source 人工
+python3 tools/scripts/archive_pool.py export --format hex        # 11H-F1「添加从节点」数据单元
+python3 tools/scripts/archive_pool.py export --format tsv --out /tmp/pool.tsv
+```
+
+- 导出 hex 结构 = `数量n(1B) + [地址 BCD 6B + 通信协议类型 1B] × n`
+- 协议类型码：`00`=透明传输 `01`=DL/T645-1997 `02`=DL/T645-2007 `03`=DL/T698.45
+- 设备类型码：`00`=采集器 `01`=电能表
+- **每轮测试的正确姿势**：先 `list` 看档案 → `export --format hex` → 下发添加从节点；
+  设备可能仍在线，直接等 CCO 组网即可，不必重新搜表
+
+搜表（从节点主动注册）`tools/scripts/search_meter.py`：
+```bash
+python3 tools/scripts/search_meter.py --minutes 15 --dry-run   # 只构帧预检，不占串口
+python3 tools/scripts/search_meter.py --minutes 15             # 真跑，约 15 分钟
+```
+流程（库卡 `03_QGDW10376.2_全帧类型.md` §11 + `86_档案自动同步_业务` 6.4）：
+`12H-F2 暂停路由` → `11H-F5 激活主动注册`（开始时间 BCD6=秒分时日月年 / 持续时间 BIN2=**分钟** /
+重发次数 / 随机时间片数）× 收集 `06H-F1/F4`（上报从节点信息）→ `06H-F3` 即搜表结束 → `11H-F6` 终止兜底。
+搜到的节点**直接 upsert 进档案区**（按地址去重，累加出现次数）。
+
+**三个坑（实测）**
+1. **DT1 编码**：`DT2=0` 时 DT1 逐位对应 `F8..F1` ⇒ **F2=0x02、F5=0x10**。
+   库卡「12H-F2 暂停路由」的示例帧写 `12 04 00`（=F3）**是错的**，照抄会发错命令；以映射表与
+   `libs/sim_concentrator/frame_codec.fn_to_dt` 为准（已记入库 `经验索引.md`）。
+2. **06H 帧别手工切字节**：simcon 帧日志（`data/logs/simcon/sc-*.jsonl`）里每帧的
+   `parsed.items` 已经把「从节点N地址 / 协议类型 / 设备类型 / 下接从节点」解码好，直接取用。
+3. **搜表期间 CCO 关白名单过滤**（库卡 94）：主动注册模式下白名单外设备也能入网，
+   搜表结束恢复过滤。所以现场看到 `ASSOC_RSLT_OUTOFLIST`（reason=1）时，要么先下发档案，
+   要么先跑一轮主动注册——这是业务态，不是故障。
+
+> 来源：协议层/03_QGDW10376.2_全帧类型.md §2.8 DT 映射、§11 F1/F5；业务层/86_档案自动同步_业务.md 6.4；协议层/94 卡（白名单过滤方式）；2026-10-28 实机
+
 ## 9. 红线
 
 1. **不可取消的不重试**：`verify` 与烧录一样提交即跑完；卡住就等 `wait` 到终态，不并发重提。
