@@ -261,7 +261,8 @@ curl -s "http://127.0.0.1:8790/api/ai/v2/jobs/<job_id>?wait_seconds=30"
 - `verification_run` 终态 summary 带步骤判定（形如 `verification_run succeeded: fail (0 pass/1 fail)`）——**`succeeded` 只代表任务跑完，不代表验证通过**。
 - 业务参数在**创建时**校验：非法 `window.mode`、缺 `match`、未知 `session_id`、`minute_periods` 缺 `task_no`、`raw_hex` 无收窄条件，现在直接 `422`（旧行为是 202 后异步 error 且无原因）。
 - **异步 error 的原因不在 evidence 里**：实测 `failed` 的 verification job，L1/L2 全是 `items:[]`，只有 `summary:"verification_run error"`。真因在该 op 的 `error` 字段，文件是 **`<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json`**（**不在** `<WORKBENCH_ROOT>/data/...` 下），op id 取 job 信封的 `underlying_refs` / `result.underlying_operation_id`。**证据全空时不要断定"没原因"**，去翻这个文件。
-- **读失败原因的正确顺序（2026-10-28 实测）**：① 先 `GET /api/ai/v2/jobs/{job_id}` 读 `result.result.steps[].reason` —— 构帧/匹配失败的直接原因就在这里（例 `构帧失败: ValueError("invalid literal for int() with base 16: '10H'")`）；② 看同处 `sent_hex`：**为空 = 根本没发出去**，不是"没收到回应"；③ L1/L2 evidence 可能全空；④ 最后才翻 `operations.json` 的 `error` 兜底。**跳过 ① 会白绕一圈**（我方 2026-10-28 踩过）。
+- **读失败原因的顺序（2026-10-28 实测 + 当日修复）**：① `GET /jobs/{job_id}` 看 `result.result.steps[].reason`（构帧/匹配失败的直接原因）；② 同处 `sent_hex`：**为空 = 根本没发出去**，不是「没收到回应」；③ **`GET /jobs/{job_id}/evidence?level=L1`** —— 2026-10-28 `66c8623` 之后**失败任务也会返回证据**（失败步的 `index/name/result/sent_hex/matched/reason`；操作级失败返回一条含 `reason` 的兜底项），不再是空数组；④ `operations.json` 的 `error` 只作最后兜底。
+- 注意：`afn` 写成 `"10H"` 这类格式错，自 `8276bc8` 起**提交就 422**、不建 job；若 step 里出现 `构帧失败: ValueError(...)`，说明跑的是旧版，或缺的是别的键（如 `缺少参数 nid`）。
 
 > 来源：references/_归档-门面v2.9.md:124-126、136-140、150-153；references/operation-guide.md:27、50-52
 > 来源：validation-20261028/F4（T3 实机：`job-b7d16f008543410b` 的 L1/L2 均 `items:[]`，真因在 `op-3d4f9644840c4d6c.error`）
