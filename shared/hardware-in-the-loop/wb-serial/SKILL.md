@@ -25,7 +25,12 @@ curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
 
 - `GET /api/health` 先确认工作台在线，再 status、再 verify，**最后**才 `module-actions` / `module-sessions` / `simcon` / `simeter`。
 - **默认只验目标口**（上例的 `ports:["<mapping_id>"]`）：不带 `ports` 的全量 verify 会把别的口的状态算进 `ok`，`{}` 一次就可能得到假的失败。
-- **成功特征按口判定**：目标口 `workbench_ready=true` 且（`checks.open_ok=true` **或** `checks.in_use=true`）。`ok` 只是全局汇总，**别的口离线不阻塞本口**；**`ok=false` 只在目标口自身 `ports[].errors` 非空时才算阻塞**，此时按 errors 报层级。
+- **按口判定，用 `usable`（2026-10-28 `e3e85b7` 起）**：`ports[].usable` = `enabled` 且 `workbench_ready` 且**本口 errors 为空**，只看本口、不受别的口影响。
+  - 直接判：目标口 `usable=true` → 可以 ensure/open；`usable=false` → 按该口 `errors` 报层级，别动。
+  - 要连打开能力一起看：`usable=true` 且（`checks.open_ok=true` **或** `checks.in_use=true`）；`open_ok=null` 不等于失败（`in_use`、请求 `open:false`、软链非字符设备时都不做打开检查）。
+  - **不要用 `ok` 判单口**：`ok` 是所有 enabled 口的通道层 AND，一个没接的口（如 `factory`/COM7）就把它拉成 false。要看"整体是否全就绪"用 `all_enabled_ready`；要看"哪些口可用/不可用"用 `ready_ports` / `unusable_ports[{id,reason}]`。
+  - 这些字段的定义写在响应的 `semantics` 里（六条：`ok` / `all_enabled_ready` / `usable` / `workbench_ready` / `in_use` / `open_ok`），拿不准直接读它，别猜。
+- **改了桥配置不生效会被报出来（同日新增）**：顶层 `config_stale=true` + `stale_hint`（含配置被改的时刻）说明桥进程还在用旧配置 → 要重启**两侧**桥；**不要用 SIGHUP**（桥把它当停机信号）。`config_sources` 分别报 `workbench` / `wsl_bridge` / `windows_bridge` 三份；`windows_bridge` 跨主机取不到时会如实 `known=false` + reason。旧版桥不上报载入时刻时，按桥进程 `started_at` 保守推断（`baseline_source=process_start`）。
 - 口被已有会话占住时 `checks.open_ok=null` + `open_error="端口被工作台会话占用，跳过打开检查"` + `in_use=true`，`ok` 仍可能是 `true`；`in_use=true` 只说明该口**此刻无法自证可打开**，不是失败。
 - verify 的 `open` 参数：`{"ports":["simcon"],"open":true}` 可只验指定口；`open=false` 跳过打开检查（`GET` / `POST` 同一响应形状，`POST` 才带 body；`status` 只读、不打开串口）。
 
