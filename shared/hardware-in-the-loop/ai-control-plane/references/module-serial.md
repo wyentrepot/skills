@@ -1,5 +1,11 @@
 # 模块串口会话（cco/sta）与烧录
 
+> **前置（2026-10-22）**：开串口前先跑 `/api/serial-bridge/status` + `/verify`，
+> 确认目标口 `workbench_ready=true`；`false` 时不要 ensure/start。当前 `cco-main`
+> = **COM8**@115200、`sta-main` = **COM9**@115200（2026-10-28 更正：原文写反，依据
+> `config/serial_ports.json` 与 10-27 实机日志文件名；WSL 路径 `/run/hplc/serial/*`）。
+> 细节见 `references/serial-bridge.md`。
+
 > v2 门面（免 token，local_full）：`POST /api/ai/v2/module-actions`，action=ensure/send/stop，
 > 202 + job → `GET /api/ai/v2/jobs/{id}`。**实测坑（2026-09-10）**：普通 stop 遇活跃观察任务
 > 返回 409（非故障）→ `force:true`；v2 stop job 可能停在 `waiting/running`（已知状态不收敛点），

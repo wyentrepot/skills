@@ -1,7 +1,16 @@
 # 模拟集中器：验证任务 / 单步 / 帧日志
 
-> **无固定串口映射**：verify/step/open 不传 `port` 时自动选择可用串口（排除侦听台/
-> 模块日志已映射端口，缺省 9600/E/8/1），需要固定端口时显式传 `port`。
+> **前置（2026-10-22）**：先跑 `/api/serial-bridge/status` + `/verify`，确认
+> `simcon` 口 `workbench_ready=true`。当前 `simcon` = COM4@**115200**（2026-10-27 20:07 起，
+> 见 `config/serial_ports.json` 为唯一真相源；CCO 自适应 9600E→115200N→115200E，映射 baud 要与 CCO 当前落点一致）。
+> CCO 复位用本地 `01H-F1`；14-F2 匹配 `fn:2`（不是 242）。
+> 细节见 `references/serial-bridge.md`。
+
+> ⚠️ **禁止依赖自动选口（2026-10-28 实测）**：verify/step 的 `task` 不传 `port`
+> 也不传 `mapping_id` 时，实现会自选一个"可用串口"，实测落到 **`/dev/ttyS0`**，
+> 报 `Could not configure port: (5,'Input/output error')`，并在 `data/logs/simcon/`
+> 留下 `sc-*-dev-ttyS0.jsonl`；这与本项目"串口一律走桥软链、禁止裸 tty"的红线冲突。
+> **一律显式传 `mapping_id`（`simcon` / `cco-main` / `sta-main`）**；`port` 只在排查桥问题时用。
 > resource 固定 `simcon`；所有收发的 1376.2 帧都会进**会话帧日志**并持久化到
 > `data/logs/simcon/sc-*.jsonl`。
 
