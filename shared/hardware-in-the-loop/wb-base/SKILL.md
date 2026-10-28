@@ -103,7 +103,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 
 - **scope 最小化**：只申请本次任务需要的（§2.2），上面的例子就是"只监控日志"的最小集。`resources` 取 `*` 或具体 `mapping_id`/`session_id`；`ttl_seconds` 1–86400；`max_operation_seconds` 可选（默认 1800）。
 - **要烧录必须给 `firmware_roots`**（允许的固件目录白名单数组），否则（v1 / 局域网面）flash 返回 **403「当前授权未配置允许烧录目录」**。
-- **安全缺口（2026-10-28 实测）**：v2 `local_full`（本机 loopback 免 token）下 `firmware_roots` **根本不校验**——零授权、无 `firmware_roots` 也把 STA 烧成了；白名单只在 Bearer/局域网面生效，P1-2 会收紧。**团队红线：烧录必须由人授权**，不得因为"能绕过"就这么干。
+- **白名单两来源（2026-10-28 `d5719b7` 起 v1/v2 统一）**：`grant.firmware_roots` 优先 → 回退环境变量 `WORKBENCH_AI_FIRMWARE_ROOTS` → 都空则 403。`local_full`（本机 loopback 免 token）下没有 grant，白名单由 env 顶上；**没配 env 就 403**。放行时写 `store.audit(action="flash.authorization")`，记 `authorization_source`（grant/env/local_full_env）+ `bin_path` + 命中的 root。**团队红线：烧录必须由人授权**，不得靠 env 给自己开白名单。
 - `token` **只返回一次**（服务端只存 SHA-256 摘要）——务必当场保存，AI 全程只用 token。`503` = admin key 未配置/没重启；`403` = key 错或非本机发起。
 
 > 来源：references/auth.md:1-21；references/operation-guide.md:102-123

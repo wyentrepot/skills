@@ -15,7 +15,8 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 - **scope 最小化**：只申请本次任务需要的（见下表），示例即"只监控日志"所需的最小集。
 - `resources`：`*` 或具体 mapping_id / session_id；`ttl_seconds` 1–86400；
   `max_operation_seconds` 可选（默认 1800）。
-- **要烧录必须给 `firmware_roots`**（允许的固件目录白名单数组），否则 flash 返回
+- **要烧录必须有白名单**：`grant.firmware_roots`（允许的固件目录数组）优先，空则回退环境变量
+  `WORKBENCH_AI_FIRMWARE_ROOTS`（2026-10-28 `d5719b7` 起 v1/v2 统一）；两者都空时 flash 返回
   403「当前授权未配置允许烧录目录」。
 - 响应里的 `token` **只返回一次**（服务端只存 SHA-256 摘要）——务必保存，AI 全程只用 token。
 - 503 = admin key 未配置/没重启；403 = key 错或非本机发起。

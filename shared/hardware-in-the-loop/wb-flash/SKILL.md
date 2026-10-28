@@ -26,7 +26,10 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 ```
 
 - `firmware_roots` = 允许烧录的目录白名单；缺它 → 403「当前授权未配置允许烧录目录」（Bearer/局域网面；`local_full` 例外见下条）。**403 不是缺陷**，正确解是签发时带目录；禁止重启工作台塞 env 绕过（等于自扩权）。本机 loopback + `WORKBENCH_LOCAL_FULL_ACCESS=1` 时 v2 免 token，局域网必须 `Bearer <token>`（token 只返回一次，别写进日志/提交）。
-- **已知安全缺口（2026-10-28 实测，如实记在这里）**：v2 `local_full` 下 `firmware_roots` 白名单**根本不校验**——零授权、无 `firmware_roots` 也把 STA 烧成了。这是**缺口，不是推荐用法**（白名单只在 Bearer/局域网面生效，P1-2 会收紧）。**团队红线：烧录必须由人授权**，不许因为"能绕过"就这么干，也不许据此跳过查 1。
+- **白名单有两个来源（2026-10-28 `d5719b7` 起 v1/v2 统一）**：① 授权里的 `firmware_roots` 优先；② 空则回退启动时的环境变量 `WORKBENCH_AI_FIRMWARE_ROOTS`（多目录用路径分隔符）；③ 两者都空 → 403「当前授权未配置允许烧录目录」；④ 路径不在任一 root 内 → 403「固件路径不在当前授权的允许目录内」。
+- **`local_full`（本机 loopback 免 token）下 `grant` 为空**，白名单会由 env 顶上 —— 所以"免凭证也能烧"的前提是**启动时配了 env 白名单**；没配就 403。这不是"不校验"，是"来源换了"（修前才是真的没校验，`d5719b7` 已收口）。
+- **放行会留审计**：成功的放行会写一条 `store.audit(action="flash.authorization")`，含 `authorization_source`（`grant` / `env` / `local_full_env`）、`bin_path`、命中的 root、`operation_id`。要回答"这次烧录凭什么被允许"，查这条。注意：**审计条数 ≠ 烧录次数**（每次放行都记一次，同键重提也算一次放行）。
+- **团队红线不变**：烧录必须由人授权；不许因为"env 能顶"就跳过查 1，也不许靠重启工作台塞 env 给自己开白名单。
 
 > 来源：references/auth.md:6-21、references/module-serial.md:65、交接-20261028.md:66
 > 来源：validation-20261028/F5（T4 实机：未签发授权、无 `firmware_roots`，v2 `local_full` 未返 403 即烧成）
