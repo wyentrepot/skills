@@ -114,6 +114,50 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/module-sessions/<session_id>/stop \
 > 来源：references/module-serial.md:1-48、references/operation-guide.md:156-183
 > 来源：validation-20261028/F7（T1 实测：`owned=false` 复用 `ms-e42e73a9a3c3`；plain stop 409 → force → 会话转 `idle`）
 
+## 2.5 板身份识别（**不 reboot**，2026-10-28 实测两端通过）
+
+工具：`python3 tools/scripts/identify_board.py <mapping_id> [--json] [--sta-show]`
+原理：向模块串口发控制台**只读**命令 `version` 与 `fcversion`，从**会话日志**抓回显解析。
+两端固件都有这两条命令（STA `bsp/venus/sdk/src/cmd.c`、CCO `bsp/venus/sdk/libdepend/cmd.c` 的 CMDTAB）。
+
+实测样例（河北 STA / 安徽 CCO）：
+```
+sta-main：HE_BEI_MODE(23) VENUS2Mr5688 hv0101 sv019107(2026-10-20) isv231004(2026-10-20) 固件分支 v7
+cco-main：AN_HUI_MODE(09) VENUS8Mr5252 hv0201 sv002601(2026-10-15) isv090028(2026-10-26) 固件分支 v2
+```
+
+**判据表**
+| 字段 | 来自 | 用途 |
+| --- | --- | --- |
+| `diqu name` / `diqu mode` | `version` | 地区（HE_BEI_MODE、AN_HUI_MODE…） |
+| `Hardware` / `hversion` | `version` | 硬件版本（VENUS2M…=STA 系、VENUS8M…=CCO 系） |
+| `sversion` / `ver_date` | `version` | 大版本 sv 与日期 |
+| `fc sversion` / `fc ver_date` | `fcversion` | 小版本 isv 与日期 |
+| `temperature` **有/无** | `fcversion` | **有 = 板上跑的是 v7 分支固件**（该行只在 `#if defined(VENUS_V7)` 里编入），无 = v2 分支 |
+
+**红线：v2 与 v7 固件不能互升**（同一硬件代次必须配套同一分支的件）。所以"跑的是哪条固件分支"
+可以当硬件代次的**代理**判据——但这是代理，不是硬件自报。
+
+**CCO 侧还能一次看整网**（`--sta-show`，仅 CCO 有该命令，STA 没有）：
+```
+index tei  lv pxy ty p phase fcl md fcode mac          version date    ccode isv    isv_date ontime
+0     0x1  0  0   CCO 0 A--N  cco md FC    006600660066 002601  26/10/15 F8   090028 26-10-26 - -
+```
+`sta show` 表里每个节点都带 `version / isv / isv_date` → **CCO 能代替逐板去问**，且能顺带看
+`onnet` 是否在网。
+
+**四个坑（都实测踩过）**
+1. **回显不在 send 响应里**：`module-actions(send)` 只回"发了 N 字节"，命令回显落在会话日志；
+   发完必须**等 2~3 秒**再读，否则什么都抓不到（我第一次 100 ms 就关了，空手）。
+2. **日志必须按端口筛**：不能取"全局最新日志"——持续打印的板子（STA 的 beacon/工厂日志）会把自己的
+   文件 mtime 一直刷新，全局取最新会读到**别的板子**的身份。日志名含 `[<mapping_id>-COMx-...]`，
+   按它筛，并断言与端口一致。
+3. **两端 `version` 输出格式不同**：CCO 的 `ver_date` 是**两位年**（`26-10-15`）、且**不打印
+   `Build time`**；STA 是四位年、有 `Build time`。解析要兼容两种。
+4. **`sta show` 只覆盖 CCO**：STA 上没有 `sta` 命令，发过去只会得到错误提示。
+
+> 来源：2026-10-28 实机（`tools/scripts/identify_board.py`）+ 固件 cmd.c 的 CMDTAB 与 `docmd_version/docmd_fcversion` 实现
+
 ## 3. 日志增量读取
 
 ```bash
