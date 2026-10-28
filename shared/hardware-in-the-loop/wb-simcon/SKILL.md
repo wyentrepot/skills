@@ -253,9 +253,25 @@ curl http://127.0.0.1:8790/api/simcon/responders
 - **事实**：simcon 口是**物理独占**——同一物理口同一时刻只有一个持有者，被占用返回 `409`，
   这不是故障（AI 与前端、两名执行者同规则）。可提交的并发证据：`verify` 并发提交即 `409`
   （同一会话同一时刻只允许一个验证任务，且不可取消）；`step`/`open`/`batch_read` 同样因口被占返 `409`。
-- **当前实现的准入边界**：没有"持有者登记/排队/超时回收"层，409 只反映**物理口有没有被占**；
-  因此「未持有时提交会被拒」是**约定 + 现有串口独占兜底**，不要指望有队列把你排上（这是
-  `REQS.md` P1-1 要补的能力，尚未上线）。
+- **统一闸门已上线（2026-10-28 `90eead7`）**：`verify` / `step` / `open` / `close` **四个入口共用一把闸门**，
+  同一时刻只允许一个在跑。旧版只有 `verify` 有闸，`step`/`open`/`close` 能在 verify 跑着时插进来——
+  最严重后果不是失败而是**假通过**：verify 等应答时被别人的 `step` 帧喂到，把别人的应答当成自己的、
+  判 `pass` 写进结果表，事后无人能发现。`close` 更狠，会把串口从进行中的 verify 底下抽走。
+- **409 现在会告诉你谁在用**（实测原文）：
+  `已有模拟集中器任务在运行：actor=local:loopback，动作=verify，已运行 1.4s，operation=op-824182f2c7534422`
+- **随时可查占用（只读，不阻塞）**：
+  ```bash
+  curl -s http://127.0.0.1:8790/api/ai/v2/simcon/lease
+  # 空闲:   {"held":false,"holder":null,"policy":"no_queue_reject"}
+  # 占用中: {"held":true,"holder":{"actor":"local:loopback","kind":"verify",
+  #          "operation_id":"op-…","started_at":"2026-10-28T…","elapsed_seconds":0.74,
+  #          "thread":"ai-simcon-verify"},"policy":"no_queue_reject"}
+  ```
+  提交前先查它：`held=true` 就别提，按 `elapsed_seconds` 估还要等多久，不要盲重试。
+- **策略是"拒绝"不是"排队"**（`policy=no_queue_reject`）：没有人替你排队，被拒就等或改时段。
+- **两条已知边界**：① 闸门只覆盖 **AI 面**；GUI 页面与串口 Profile 应用走 `/api/simcon/*` 直连面，
+  仍可绕过——所以"人点页面"与"AI 跑 verify"同时进行时，仍可能混流；② `step`/`open`/`close` 走 **v1**
+  （需要 Bearer token，`local_full` 免 token 只对 v2 生效），而闸门对 v1/v2 一视同仁。
 - **产物目录按批分开**：每批验证单独一段 `run_id` 与独立会话文件
   `data/logs/simcon/sc-<时间戳>-<端口>.jsonl`；取证据只认**本批 run_id + 本会话 session_id**。
 - **同批两份证据一律作废**：两名执行者同时抢同一口会**帧混流、产物互覆写**，此后同一批的
