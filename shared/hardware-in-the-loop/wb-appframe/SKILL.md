@@ -1,17 +1,17 @@
 ---
 name: wb-appframe
-description: 什么时候用我：手头只有一帧 hex 报文、7E 原始日志、CCO 日志或问题归档包，要离线解析报文（parse）、按知识库语义构帧做测试用例（build）、或对构好的帧做回验断言（verify）时用我。1376.2 内嵌 698/645 自动递归（典型 1103 并发抄表），全程不需要启动工作台 8790、不需要解析网关 8700、不需要 DLL / token / 串口。要驱动串口、烧录、观察取证、串口桥 preflight 的，用 /root/.dsh/skills/wb-serial/SKILL.md；分钟采集漏点专项分析用 mclt-collect-analysis。
+description: 什么时候用我：手头只有一帧 hex 报文、7E 原始日志、CCO 日志或问题归档包，要离线解析报文（parse）、按知识库语义构帧做测试用例（build）、或对构好的帧做回验断言（verify）时用我。1376.2 内嵌 698/645 自动递归（典型 1103 并发抄表），全程不需要启动工作台 8790、不需要解析网关 8700、不需要 DLL / token / 串口。要驱动串口、烧录、观察取证、串口桥 preflight 的，用 wb-serial；分钟采集漏点专项分析用 mclt-collect-analysis。
 argument-hint: "[任务，如 解析这帧报文 / 构一帧645读电能 / 回验构帧产物]"
 metadata:
   author: reasonix
   version: 1.0.0
-  applies-to: 任意工作区（<WORKBENCH_ROOT> 按序单点解析见 /root/.dsh/skills/wb-base/SKILL.md §1.1）
+  applies-to: 任意工作区（<WORKBENCH_ROOT> 按序单点解析见 wb-base §1.1）
   source: 拆自 ai-control-plane（2026-10-28）
 ---
 
 # 离线帧解析 / 构帧 / 回验（wb-appframe）
 
-**边界**：本技能只讲**离线应用层帧三件套**（parse / build / verify）、1376.2 内嵌递归、库级 API、协议字典查询，以及排查「缺帧/缺报」时要直查的离线数据源。归别的子技能的事：串口会话、串口桥 preflight、需求级实时观察取证、CCO 日志在线监听 → `/root/.dsh/skills/wb-serial/SKILL.md`；AI 任务门面（v2 investigations/module-actions/flash-jobs）与授权 → 老门面 `/root/.dsh/skills/ai-control-plane/SKILL.md`（只读）；分钟采集 11E4/11E3/时钟偏移专项 → `mclt-collect-analysis` 技能。
+**边界**：本技能只讲**离线应用层帧三件套**（parse / build / verify）、1376.2 内嵌递归、库级 API、协议字典查询，以及排查「缺帧/缺报」时要直查的离线数据源。归别的子技能的事：串口会话、串口桥 preflight、需求级实时观察取证、CCO 日志在线监听 → `wb-serial`；AI 任务门面（v2 investigations/module-actions/flash-jobs）与授权 → 老门面 `ai-control-plane`（只读）；分钟采集 11E4/11E3/时钟偏移专项 → `mclt-collect-analysis` 技能。
 
 ## 1. 什么时候必须离线（先判定，不要默认起工作台）
 
@@ -22,12 +22,12 @@ metadata:
 | 构好帧要断言字段是否符合意图 | 本技能 §2 `verify` | `verified=false` 时看 `diff` |
 | 7E 原始日志 / CCO 日志 / xlsx / 问题归档包，查「某时段缺数据」 | 本技能 §7 离线数据源 | 直查 sqlite/JSONL/日志，不经 HTTP |
 | 分钟采集缺报/11E4/11E3/时钟偏移专项 | `mclt-collect-analysis` 技能 | 本技能只在它不可用时回退 §7 |
-| 要开串口、发指令、烧录、观察取证 | `/root/.dsh/skills/wb-serial/SKILL.md` | 属在线档，别在本技能里找 |
+| 要开串口、发指令、烧录、观察取证 | `wb-serial` | 属在线档，别在本技能里找 |
 
 - **覆盖范围**：应用层帧 = **1376.2（内嵌 698/645 自动递归解出，典型如 1103 并发抄表 F1H-F1）、698.45、645-2007**。GW 封装 / 双模 / 网络层帧**不在本档**（走在线全功能档）。
 - 本档**不启工作台 8790、不启解析网关 8700、不需要 DLL / token / 串口**：纯 Python 解析库 `libs/parser_lib` 直用，JSON 打到 stdout。
 
-> 来源：SKILL.md:67-78
+> 来源：SKILL.md
 
 ## 2. parse / build / verify 三件套（命令可复制）
 
@@ -74,13 +74,13 @@ python3 <WORKBENCH_ROOT>/tools/scripts/appframe.py verify --hex "68 ..." \
 | `1` | 业务失败（JSON 内 `error` / `verified:false`，含「无法识别」） |
 | `2` | 用法错误 |
 
-> 来源：SKILL.md:80-105
+> 来源：SKILL.md
 
 ## 3. 1376.2 内嵌 698/645 递归：注意点
 
 - **一层入口、递归内嵌**：`parse` 对 1376.2 自动把内嵌的 645/698 帧解到 `frame.nested`，不用手工切内层 hex（SKILL.md:81）。
 - **构帧时内层帧走 `data.raw`**：1376.2 的 `build` 用 `{"afn":"F1","fn":1,"data":{"raw":"<645/698帧hex>"}}`，即**先把内层帧构好/取到，再作为原样字节塞进 1376.2 的 DATA 单元**（SKILL.md:90-91）；这也是 1103 并发抄表包裹场景的写法。
-- **AFN 与 Fn 的取值范围有硬约束**：`AFN=06` 只支持 `F1`-`F5`，写 `06/F230` 会 422（helpers.md:27）；`AFN=10/F230` 实测可构出 15B（helpers.md:26-27）。
+- **AFN 与 Fn 的取值范围有硬约束**：`AFN=06` 只支持 `F1`-`F5`，写 `06/F230` 会 422（ai-control-plane/references/helpers.md）；`AFN=10/F230` 实测可构出 15B（ai-control-plane/references/helpers.md）。
 - **`afn` 记法坑（最容易静默不匹配）**：`afn` 字符串按 **2 位 hex**（协议记法 `10H` 就写 `"10"`）；数值按**原始字节值**（`0x10=16`，写成 `10` 就变成 `0x0A`，**静默不匹配**）。`fn` 写 `"F2"`/`"F230"`/十进制都可以，expect 与 send 已同口径归一（SKILL.md:146-149）。
 - 内层帧必须自成完整帧：它是原样透传的字节段，截断/补位都会让下游解析失败（见 §5「帧截断」）。
 
@@ -109,7 +109,7 @@ print(decode('68 12 34 ...'))"
 | **帧截断/长度不足** | 内嵌帧解不出 `nested`、尾部字段缺失 | 内层帧要完整（含校验和），别截半帧塞进 DATA |
 | **同名字段不同源** | 与 8790 `POST /api/listener/parse`（net48 DLL 深度解析）结果不一致 | 两者**口径不同源**，做对拍时才一起用（SKILL.md:103-104） |
 
-> 来源：SKILL.md:73-77、SKILL.md:83、SKILL.md:103-104、SKILL.md:146-149、helpers.md:26-27
+> 来源：SKILL.md、ai-control-plane/references/helpers.md
 
 ## 6. 协议字典查询（`/api/dict`，只读、免鉴权）
 
@@ -138,7 +138,7 @@ curl "http://127.0.0.1:8790/api/dict/cases?q=..."      # 检测用例库（REQS-
 - `declared_total=269` 是蒸馏原文「双模通信检测条目体系共 269 项」的**体系宣称值**；`count` 是库内**实枚举条目**（237 检测项 + 42 参数表行 = 279）。**两者口径不同、各有出处，不相等属预期**。
 - observation 的 `loghook_rule.rule_id` 从 `/api/dict/rules` 查（在线档用，见 wb-serial）。
 
-> 来源：api-contract.md:409-422、operation-guide.md:453-465、helpers.md:6-19
+> 来源：ai-control-plane/references/api-contract.md、ai-control-plane/references/operation-guide.md、ai-control-plane/references/helpers.md
 
 ## 7. 离线数据源速查（缺帧/缺报直查，不依赖 HTTP）
 
@@ -246,17 +246,17 @@ grep -ai  "11e3"       *.log # 11E3 补采指令
 
 > 结论速记：**CCO 发了 + 索引没有 = 接收侧丢（真缺）；CCO 没发 = 发送侧问题；链路断 = 非漏**。
 
-> 来源：references/offline-analysis.md:1-144
+> 来源：ai-control-plane/references/offline-analysis.md
 
 ## 8. 路径根与交叉引用
 
-- 命令里的 `<WORKBENCH_ROOT>` = **工作台仓库根**，解析规则（环境变量 → `~/.config/workbench/repo-root` → 向上探测 `apps/workbench`）见 `/root/.dsh/skills/wb-base/SKILL.md` §1.1；**解析不到时先问用户，不要凭记忆猜路径**。
-- 要驱动串口 / 串口桥 preflight / 实时观察 / CCO 在线监听 → `/root/.dsh/skills/wb-serial/SKILL.md`。
-- 路径根解析、AI 任务门面 v2、授权签发、证据分级 → `/root/.dsh/skills/wb-base/SKILL.md`
-- 要知道「这次改的是哪个 endpoint / 哪个前缀」的契约口径 → `/root/.dsh/skills/ai-control-plane/SKILL.md`（老门面，迁移期只读，勿改）
+- 命令里的 `<WORKBENCH_ROOT>` = **工作台仓库根**，解析规则（环境变量 → `~/.config/workbench/repo-root` → 向上探测 `apps/workbench`）见 `wb-base` §1.1；**解析不到时先问用户，不要凭记忆猜路径**。
+- 要驱动串口 / 串口桥 preflight / 实时观察 / CCO 在线监听 → `wb-serial`。
+- 路径根解析、AI 任务门面 v2、授权签发、证据分级 → `wb-base`
+- 要知道「这次改的是哪个 endpoint / 哪个前缀」的契约口径 → `ai-control-plane`（老门面，迁移期只读，勿改）
 - 与在线档的关系：真实下发/串口/烧录/取证仍走在线档；本技能只保证「帧本身」正确。
 
-> 来源：SKILL.md:12-28、SKILL.md:106-121
+> 来源：SKILL.md
 
 
 ---
@@ -267,10 +267,10 @@ grep -ai  "11e3"       *.log # 11E3 补采指令
 
 | 文件 | 该读哪一节 | 行数 |
 |---|---|---|
-| /root/.dsh/skills/ai-control-plane/references/offline-analysis.md | 离线归档解析、SQL、数据源全景 | 145 |
-| /root/.dsh/skills/ai-control-plane/references/helpers.md | 构帧约束与 8790 预检等助手 | 47 |
-| /root/.dsh/skills/ai-control-plane/references/api-contract.md | §8 协议字典 /api/dict | 491 |
+| ai-control-plane/references/offline-analysis.md | 离线归档解析、SQL、数据源全景 | 145 |
+| ai-control-plane/references/helpers.md | 构帧约束与 8790 预检等助手 | 47 |
+| ai-control-plane/references/api-contract.md | §8 协议字典 /api/dict | 491 |
 
-- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：/root/.dsh/skills/ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
+- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
 
 > 铁律：事实库里改动只改一处；子技能里**不复制**事实库内容，避免两份说法打架。

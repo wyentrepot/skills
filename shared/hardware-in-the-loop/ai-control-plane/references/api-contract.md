@@ -473,3 +473,18 @@ evidence:read, simcon:verify, simcon:send, simcon:read`。
 | G2 | 保活 iframe 切主题不实时跟随：外壳 `switchTheme` 会向所有 iframe `postMessage({type:"wb-theme-change"})`，但只有 module-serial / maintenance / serial-profile 三页装了 message 监听 | `pages/trace|dict|scenario|simcon` 及 `pages/listener/index.html`、`workbench.html`（reqs/0010 落地时即缺，非 0012 回归；maintenance 同款根因已在 REQS-0012 P5 修过 3 页） | 主题切换后，已打开的这些页签保持旧主题，直到页面重载 | 各页 `<head>` 防闪跳脚本里补 `window.addEventListener("message", e => e.data?.type==="wb-theme-change" && 注册表校验通过则 dataset.theme=...)`，参考 `pages/module-serial/module-serial.html:35-41` |
 
 （其余主题遗留见 `reqs/0012-workbench-theme-refactor/OVERVIEW.md` §五 L1/L2/L3，均有记录，不重复。）
+
+
+## 13. 串口桥（2026-10-22 新增）
+
+| 方法 | 路径 | 参数 | 响应 |
+|---|---|---|---|
+| GET | `/api/serial-bridge/status` | — | `{ok, config, supervisor, summary, ports[]}`；只读，不打开串口 |
+| GET | `/api/serial-bridge/verify` | — | 同上 + 每口 `checks`/`verify_ok`；会按映射 baud 打开 PTY |
+| POST | `/api/serial-bridge/verify` | `{ports?: [id], open?: bool}` | 同上；`open=false` 跳过打开检查 |
+
+- `channel_ok` = 桥进程 + PTY 软链 + Windows 数据通道 + 控制通道；
+  `workbench_ready` 还要求 `serial_ports.json` 映射指向软链且 `parity=N`。
+- 开任何串口会话前先 status→verify；`workbench_ready=false` 不 ensure/open。
+- 详见 `references/serial-bridge.md`；部署/常驻见项目技能
+  `skills/share/serial-bridge/SKILL.md`。

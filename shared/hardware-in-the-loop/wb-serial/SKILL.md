@@ -1,17 +1,17 @@
 ---
 name: wb-serial
-description: 什么时候用我：要驱动工作台串口时——开/关 cco、sta 模块串口会话、发串口指令、增量读模块日志、做 module_log 实时观察取证、判读 CCO 日志、配置串口 Profile/端口映射、烧录时的串口侧配合，以及**任何开串口动作之前的 serial-bridge preflight**（烧录本身的判定归 `/root/.dsh/skills/wb-flash/SKILL.md`，不在本技能展开）。串口一律走 Python 串口桥（Windows COM ↔ TCP ↔ WSL PTY），需要工作台在线（默认 8790）。只解析/构帧/回验、手头只有报文不要串口的，用 /root/.dsh/skills/wb-appframe/SKILL.md；AI 任务门面与授权用 /root/.dsh/skills/ai-control-plane/SKILL.md。
+description: 什么时候用我：要驱动工作台串口时——开/关 cco、sta 模块串口会话、发串口指令、增量读模块日志、做 module_log 实时观察取证、判读 CCO 日志、配置串口 Profile/端口映射、烧录时的串口侧配合，以及**任何开串口动作之前的 serial-bridge preflight**（烧录本身的判定归 `wb-flash`，不在本技能展开）。串口一律走 Python 串口桥（Windows COM ↔ TCP ↔ WSL PTY），需要工作台在线（默认 8790）。只解析/构帧/回验、手头只有报文不要串口的，用 wb-appframe；AI 任务门面与授权用 ai-control-plane。
 argument-hint: "[任务，如 开cco串口发指令 / 盯cco日志直到出现XX / 串口桥验证]"
 metadata:
   author: reasonix
   version: 1.0.0
-  applies-to: 任意工作区（工作台默认 http://127.0.0.1:8790；<WORKBENCH_ROOT> 解析见 /root/.dsh/skills/wb-base/SKILL.md §1.1）
+  applies-to: 任意工作区（工作台默认 http://127.0.0.1:8790；<WORKBENCH_ROOT> 解析见 wb-base §1.1）
   source: 拆自 ai-control-plane（2026-10-28）
 ---
 
 # 日志串口监听 / 模块串口会话（wb-serial）
 
-**边界**：本技能只讲**在线驱动串口**这一段——串口桥 preflight、模块串口会话（ensure/stop/send）、日志增量读取、module_log 实时观察、CCO 日志判读、串口 Profile/端口映射。**烧录只讲串口侧配合**，成/败判定唯一 owner 是 `/root/.dsh/skills/wb-flash/SKILL.md`。归别的子技能的事：帧解析/构帧/回验、离线数据源直查 → `/root/.dsh/skills/wb-appframe/SKILL.md`；AI 任务门面 v2、授权签发、证据分级 → `/root/.dsh/skills/ai-control-plane/SKILL.md`（老门面，迁移期只读，勿改）。
+**边界**：本技能只讲**在线驱动串口**这一段——串口桥 preflight、模块串口会话（ensure/stop/send）、日志增量读取、module_log 实时观察、CCO 日志判读、串口 Profile/端口映射。**烧录只讲串口侧配合**，成/败判定唯一 owner 是 `wb-flash`。归别的子技能的事：帧解析/构帧/回验、离线数据源直查 → `wb-appframe`；AI 任务门面 v2、授权签发、证据分级 → `ai-control-plane`（老门面，迁移期只读，勿改）。
 
 ## 1. 开串口前必做：serial-bridge status + verify（血泪教训，先做这一步）
 
@@ -70,7 +70,7 @@ curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
 | `工作台映射 ... 未指向桥接软链` / `parity 必须为 N` | 先改 `config/serial_ports.json`（改配置，不要绕过 verify） |
 | `wsl_bridge.lock` 被占用 | 已有实例；`wsl status` 看 pid，必要时 `wsl stop` |
 
-> 来源：references/serial-bridge.md:1-128、SKILL.md:48-66、api-contract.md:478-490
+> 来源：ai-control-plane/references/serial-bridge.md、SKILL.md、ai-control-plane/references/api-contract.md
 
 ## 2. 会话生命周期：ensure / send / stop（幂等语义）
 
@@ -111,7 +111,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/module-sessions/<session_id>/stop \
 - **stop 之后会话转 `idle`、不会消失**（`GET /api/module-serial/sessions` 仍看得到它）；释放判据是 verify 里该口 `in_use=false` + `open_ok=true`。
 - **v2 等价门面**（免 token，`local_full`）：`POST /api/ai/v2/module-actions`，action=`ensure`/`send`/`stop` → `202` + job → `GET /api/ai/v2/jobs/{id}`。实测：v2 stop job 可能停在 `waiting/running`（已知不收敛点），**以物理串口是否释放为准**，不要为等 job 终态把口一直占着。
 
-> 来源：references/module-serial.md:1-48、references/operation-guide.md:156-183
+> 来源：ai-control-plane/references/module-serial.md、ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F7（T1 实测：`owned=false` 复用 `ms-e42e73a9a3c3`；plain stop 409 → force → 会话转 `idle`）
 
 ## 2.5 板身份识别（**不 reboot**，2026-10-28 实测两端通过）
@@ -169,9 +169,9 @@ curl -s "http://127.0.0.1:8790/api/module-serial/sessions/<id>/logs?after=-1"
 - **`after=-1` 不是增量**：实测直接返回整段环形缓冲（**5000 行**，`last_seq=597513`）；真正的增量是把上一轮的 `last_seq` 作为 `after` 传回（实测 43 行、`last_seq=597556`）。第一轮用 `after=-1` 拿尾部、之后一律回传游标，否则每轮白读 5000 行。
 - 不要自己拼 `after=0` 之类未定义值。
 - 旧单/双通道形态仍保留：`/logs?after&channel`（`channel` 区分 cco/sta）。
-- 响应单次上限**可观测为 5000 行**；更早的历史不要假设能无限回捞：长会话或要全量历史时，读落盘的日志文件 `data/logs/模块/cco/*.log`（判读见 §5），或对原始日志重建索引（`POST /api/listener/logs/open`，见 `/root/.dsh/skills/wb-listener/SKILL.md`）。
+- 响应单次上限**可观测为 5000 行**；更早的历史不要假设能无限回捞：长会话或要全量历史时，读落盘的日志文件 `data/logs/模块/cco/*.log`（判读见 §5），或对原始日志重建索引（`POST /api/listener/logs/open`，见 `wb-listener`）。
 
-> 来源：api-contract.md:158-182
+> 来源：ai-control-plane/references/api-contract.md
 > 来源：validation-20261028/F7（T1 实测：`after=-1`→5000 行/`last_seq=597513`；`after=597513`→43 行/`last_seq=597556`）
 
 ## 4. 实时观察任务（module_log）——取证靠它
@@ -196,7 +196,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 - 观察任务会占用会话 → 这也是普通 `stop` 返回 409 的典型原因（见 §2.3）。
 - 有观察在跑时**不要**并发 stop/send 抢同一会话；要收工先停观察或 `force:true` stop，并确认物理口已释放。
 
-> 来源：references/operation-guide.md:197-217
+> 来源：ai-control-plane/references/operation-guide.md
 
 ## 5. CCO 日志判读要点（发送侧真相）
 
@@ -222,7 +222,7 @@ grep -aiE "(^|[^0-9a-f])11e3" data/logs/模块/cco/*.log  # 11E3，锚定词边�
 - **链路在线判定**：先 `grep -aE "串口会话打开|串口会话关闭" data/logs/模块/cco/*.log`；时段内无任何帧且前后有「关闭/打开」→ 链路断线，不是漏。
 - 交叉验证：CCO 有 06F230 → 发了，再查侦听台索引，无 = 接收侧丢帧；CCO 无 06F230 但有 11e3 → 弱信号靠补采（发送侧慢）；无帧且无补采、链路在线 → 发送侧未发出。
 
-> 来源：references/cco-log.md:1-69
+> 来源：ai-control-plane/references/cco-log.md
 
 ## 6. 串口 Profile 与端口映射
 
@@ -247,20 +247,20 @@ curl -s http://127.0.0.1:8790/api/serial-tags               # 角色↔COM 标�
 - CCO 口只在上电/复位后跑 bpsCheck，自适应序列 `bps:1`→9600E、`bps:3`→115200N、`bps:2`→115200E；`gSysPara.cac.local_rx_ok=1` 后不再重跑。复位用本地 1376.2 `01H-F1`（CCO 回 `00H-F1`，约 7 秒后重启），再用 14-F2 应答任务等待；**匹配 14-F2 时 `fn` 用十进制 `2`，不是 242**。
 - 应用改 `ser.baudrate` 时 WSL supervisor 轮询 PTY termios 并经控制口通知 Windows 重开 COM，**切换瞬间有几十毫秒中断，协议侧要能重试**。
 
-> 来源：api-contract.md:424-433、references/serial-bridge.md:53-95
+> 来源：ai-control-plane/references/api-contract.md、ai-control-plane/references/serial-bridge.md
 > 来源：validation-20261028/F2（实机 `cco-main=COM8`/`sta-main=COM9`/`listener=COM11`/`simcon=115200`/`factory=COM7 未接`，与 `config/serial_ports.json` 一致）
 
 ## 7. 烧录：本技能只讲串口侧配合（判定不在这里）
 
 > **owner 声明**：烧录的提交、`job_id`、幂等洞、`BURN SUCCESS` 判定、烧后回读横幅 —— 唯一 owner 是
-> `/root/.dsh/skills/wb-flash/SKILL.md`。本节只留串口侧必须知道的四条，**不重复判据**。
+> `wb-flash`。本节只留串口侧必须知道的四条，**不重复判据**。
 
 1. **只认 `iap_*.bin`**：`flash_*.bin` 是生产整片镜像（~2MB），bootloader 路径不认，实测 ~24%（约 503KB）后模块停止 ACK 并中止；`upgrade_*.dat` 是另一条格式，与 XMODEM 无关。
 2. **授权 `firmware_roots` 必须包含 `bin_path`**，否则 403「未配置允许烧录目录」（这是设计，不是缺陷）。
 3. **桥无 DTR/RTS/流控**，XMODEM 动态波特率未在桥上完整验证 → 烧录仍建议单档；烧录期间不并发重试、不抢同一物理口。
 4. 烧录前先按 §1 做 bridge `status`+`verify`；烧完 `stop` 会话释放串口。
 
-> 来源：references/module-serial.md:49-68、references/serial-bridge.md:106
+> 来源：ai-control-plane/references/module-serial.md、ai-control-plane/references/serial-bridge.md
 
 ## 8. 红线（串口行为边界）
 
@@ -272,7 +272,7 @@ curl -s http://127.0.0.1:8790/api/serial-tags               # 角色↔COM 标�
 6. **不可取消的操作**（烧录/verify）耐心等终态，不并发重试。
 7. **人机交接**：要让 Windows 用户用口，先 `wsl stop` 释放全部桥端口；不抢不藏。
 
-> 来源：SKILL.md:232-248、references/serial-bridge.md:96-112
+> 来源：SKILL.md、ai-control-plane/references/serial-bridge.md
 
 ## 9. 已弃用做法（见到就换掉）
 
@@ -286,16 +286,16 @@ curl -s http://127.0.0.1:8790/api/serial-tags               # 角色↔COM 标�
 | 旧版 `uart-map.ps1` / 卡在 Hyper-V 防火墙检查的脚本 | **已弃用** | 用新版 `uart-map.ps1 -Action bridge-toggle\|bridge-start\|bridge-stop\|bridge-status`；菜单 [6]/[7] 一键启停与查状态，[3] 的 usbipd 视图有 3 秒超时 |
 | 从 WSL 的 UNC 当前目录 `cmd start` 起 Windows 桥 | **禁止** | 复制到 Windows 本地目录后用 `pythonw.exe` 常驻（会话级 `python.exe` 只适合调试） |
 
-> 来源：references/serial-bridge.md:1-5、:64-67、:96-112、:115-122、references/module-serial.md:21-23
+> 来源：ai-control-plane/references/serial-bridge.md、ai-control-plane/references/module-serial.md
 
 ## 10. 交叉引用
 
-- 帧解析 / 构帧 / 回验 / 离线数据源直查：`/root/.dsh/skills/wb-appframe/SKILL.md`
-- 烧录提交后的成/败判定与回读核对：`/root/.dsh/skills/wb-flash/SKILL.md`
-- 已解析帧查询、通信流三段证据链、组网/入网诊断：`/root/.dsh/skills/wb-listener/SKILL.md`
-- 路径根解析、AI 任务门面 v2（`investigations`/`module-actions`/`flash-jobs`/`evidence`）、授权、证据分级：`/root/.dsh/skills/wb-base/SKILL.md`
-- 模拟集中器 simcon（verify / step / recv_only / frames / store）：`/root/.dsh/skills/wb-simcon/SKILL.md`
-- 契约口径（endpoint / 前缀 / 红线的原始事实来源）：`/root/.dsh/skills/ai-control-plane/SKILL.md`（老门面，迁移期只读，**勿改**）
+- 帧解析 / 构帧 / 回验 / 离线数据源直查：`wb-appframe`
+- 烧录提交后的成/败判定与回读核对：`wb-flash`
+- 已解析帧查询、通信流三段证据链、组网/入网诊断：`wb-listener`
+- 路径根解析、AI 任务门面 v2（`investigations`/`module-actions`/`flash-jobs`/`evidence`）、授权、证据分级：`wb-base`
+- 模拟集中器 simcon（verify / step / recv_only / frames / store）：`wb-simcon`
+- 契约口径（endpoint / 前缀 / 红线的原始事实来源）：`ai-control-plane`（老门面，迁移期只读，**勿改**）
 - 串口桥部署/常驻/故障全量：项目技能 `skills/share/serial-bridge/SKILL.md`（相对 `<WORKBENCH_ROOT>`）；配置 `config/serial_bridge.json`、`config/serial_ports.json`；实机证据 `data/logs/serial_bridge_evidence_20261022/`
 
 
@@ -307,11 +307,11 @@ curl -s http://127.0.0.1:8790/api/serial-tags               # 角色↔COM 标�
 
 | 文件 | 该读哪一节 | 行数 |
 |---|---|---|
-| /root/.dsh/skills/ai-control-plane/references/serial-bridge.md | 串口桥全部端点与 preflight 口径 | 129 |
-| /root/.dsh/skills/ai-control-plane/references/module-serial.md | 模块日志会话全端点 | 69 |
-| /root/.dsh/skills/ai-control-plane/references/cco-log.md | CCO 日志判读要点 | 70 |
-| /root/.dsh/skills/ai-control-plane/references/api-contract.md | §4 模块日志 / §9 串口 Profile / §13 串口桥契约 | 491 |
+| ai-control-plane/references/serial-bridge.md | 串口桥全部端点与 preflight 口径 | 129 |
+| ai-control-plane/references/module-serial.md | 模块日志会话全端点 | 69 |
+| ai-control-plane/references/cco-log.md | CCO 日志判读要点 | 70 |
+| ai-control-plane/references/api-contract.md | §4 模块日志 / §9 串口 Profile / §13 串口桥契约 | 491 |
 
-- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：/root/.dsh/skills/ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
+- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
 
 > 铁律：事实库里改动只改一处；子技能里**不复制**事实库内容，避免两份说法打架。

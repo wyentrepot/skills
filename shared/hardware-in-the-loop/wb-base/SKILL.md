@@ -15,7 +15,7 @@ metadata:
 
 只回答四类问题：**怎么连上工作台**（端口/前缀/路径根/启动）、**凭什么权限调**（grant/scope/resource/token）、**什么算证据**（L1/L2/L3 口径、观察语义、落盘）、**出错怎么自纠**（错误码与红线）。
 
-先判一次在线还是离线，判完直接走对应子技能，不重复判：**离线**（只有帧/日志/文件）→ 帧解析/构帧/回验进 `/root/.dsh/skills/wb-appframe/SKILL.md`，分钟采集漏点/11E4/11E3/时钟偏移走 `mclt-collect-analysis`；**在线** → 读本技能拿接入与授权，再只读那一个 wb-* 子技能，用完即止；**拿不准后端有什么** → 先让工作台报一次能力清单与源健康（§3.1），再回到在线判定。
+先判一次在线还是离线，判完直接走对应子技能，不重复判：**离线**（只有帧/日志/文件）→ 帧解析/构帧/回验进 `wb-appframe`，分钟采集漏点/11E4/11E3/时钟偏移走 `mclt-collect-analysis`；**在线** → 读本技能拿接入与授权，再只读那一个 wb-* 子技能，用完即止；**拿不准后端有什么** → 先让工作台报一次能力清单与源健康（§3.1），再回到在线判定。
 
 | 我要干什么 | 读哪节 / 哪个技能 |
 | --- | --- |
@@ -29,13 +29,13 @@ metadata:
 | 判"这条结论算不算证据""为什么是 inconclusive" | 本技能 §4 |
 | 只想跑一次全链路验证拿报告（无 token） | 本技能 §5.1 |
 | 401/403/404/409/422/503 怎么处置 | 本技能 §7 |
-| 烧录固件并判定是否真烧成 | `/root/.dsh/skills/wb-flash/SKILL.md` |
-| 侦听台建索引、查已解析帧、通信流追踪、组网诊断 | `/root/.dsh/skills/wb-listener/SKILL.md` |
-| 模拟电表 645 从站调测 | `/root/.dsh/skills/wb-simeter/SKILL.md` |
-| 模拟集中器验证/单步/并发抄表/档案 | `/root/.dsh/skills/wb-simcon/SKILL.md` |
-| 开串口前的 serial-bridge preflight、模块串口会话 | `/root/.dsh/skills/wb-serial/SKILL.md` |
+| 烧录固件并判定是否真烧成 | `wb-flash` |
+| 侦听台建索引、查已解析帧、通信流追踪、组网诊断 | `wb-listener` |
+| 模拟电表 645 从站调测 | `wb-simeter` |
+| 模拟集中器验证/单步/并发抄表/档案 | `wb-simcon` |
+| 开串口前的 serial-bridge preflight、模块串口会话 | `wb-serial` |
 
-> 来源：ai-control-plane/SKILL.md:14-35；references/_归档-门面v2.9.md:174-212（旧门面已归档，行号以归档为准）
+> 来源：ai-control-plane/SKILL.md
 
 ## §1 接入
 
@@ -47,7 +47,7 @@ metadata:
 - **挂载降级**：listener 依赖 C# DLL/pythonnet，挂载失败自动降级（`GET /api/platform-version` 里 `listener_mounted=false`，页签显示"不可用"），不拖垮整体。
 - **平台端点**：`GET /`（外壳）、`GET /api/platform-version`（`{app, version, module_log_mounted, listener_mounted}`）、`GET /api/health`（`{status:"ok", app:"workbench"}`，免鉴权探活）、`POST /api/shutdown`（uvicorn graceful 停机，进程退出）。
 
-> 来源：references/api-contract.md:16-49、63-70
+> 来源：ai-control-plane/references/api-contract.md
 
 ### §1.1 路径根解析（`<WORKBENCH_ROOT>` 按序单点解析）
 
@@ -60,13 +60,12 @@ metadata:
 解析不到就**先向用户确认**，不要凭记忆猜路径、不要猜 COM 号。库存校验脚本用同一顺序（`--repo-root` 显式参数最优先），找不到时给明确报错；它只构造惰性 stub，**不开串口、不启动侦听台、不执行烧录**：
 
 ```bash
-python scripts/verify_api_inventory.py [--repo-root <WORKBENCH_ROOT>]   # 技能内副本
-python tools/scripts/verify_api_inventory.py [--json]                   # 仓库内副本
+python tools/scripts/verify_api_inventory.py [--json] [--repo-root <WORKBENCH_ROOT>]   # 仓库内工具
 ```
 
 `使用经验/` 的定位（维护边界）：只放**跨环境的一次性事实与过程复盘**；能固化为边界条款的内容（启动姿势、红线、路由判定、数据源清单）一律写进 SKILL.md / references 正文，不再追加条例，防止双份文档漂移。
 
-> 来源：references/_归档-门面v2.9.md:106-121；references/api-contract.md:338-348；references/features.md:103-109
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/features.md
 
 ### §1.2 启动与配置
 
@@ -85,7 +84,7 @@ WORKBENCH_LOCAL_FULL_ACCESS=1 HPLC_OPEN_WORKBENCH=0 \
 - **人工授权密钥**（仅"AI 自动拿授权"需要）：启动前设 `WORKBENCH_AI_ADMIN_KEY`，或用 `tools/scripts/一键生成AI密钥.bat` 一键装好；未配置时 admin 授权接口返回 `503 未配置人工授权管理密钥`。日常人工点页面不需要它。
 - **一键启动包**用 `git archive HEAD` 打包：**未提交的改动不生效**（改页面/后端先提交再打包）。
 
-> 来源：references/_归档-门面v2.9.md:154-172；references/operation-guide.md:88-99；references/api-contract.md:455
+> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ## §2 授权：grant / scope / resource / token
 
@@ -106,7 +105,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 - **白名单两来源（2026-10-28 `d5719b7` 起 v1/v2 统一）**：`grant.firmware_roots` 优先 → 回退环境变量 `WORKBENCH_AI_FIRMWARE_ROOTS` → 都空则 403。`local_full`（本机 loopback 免 token）下没有 grant，白名单由 env 顶上；**没配 env 就 403**。放行时写 `store.audit(action="flash.authorization")`，记 `authorization_source`（grant/env/local_full_env）+ `bin_path` + 命中的 root。**团队红线：烧录必须由人授权**，不得靠 env 给自己开白名单。
 - `token` **只返回一次**（服务端只存 SHA-256 摘要）——务必当场保存，AI 全程只用 token。`503` = admin key 未配置/没重启；`403` = key 错或非本机发起。
 
-> 来源：references/auth.md:1-21；references/operation-guide.md:102-123
+> 来源：ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F5（T4 实机：v2 `local_full` 零授权、无 `firmware_roots` 也烧成 STA）
 
 ### §2.2 scope → 能力映射（14 种）
@@ -124,9 +123,9 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 | `simcon:verify` / `simcon:send` / `simcon:read` | 验证任务 / 单步·开关串口 / 帧日志与持久层读 | `simcon` |
 | `simeter:read` | 模拟电表状态/帧日志只读（v2 `simeter_frames.read`） | 模拟电表观察；写操作免 token 直连 `/api/simeter/*` |
 
-**资源（resource）**：串口类用 `serial_ports.json` 的 `mapping_id`：`cco-main`、`sta-main`、`listener`（实际 COM 号随接线变化，**调用方优先用 mapping_id，不硬编码 COM 号**）；simcon 口的 task **必须显式 `mapping_id:"simcon"`**（不传会自选 `/dev/ttyS0` 报 `Input/output error`，见 `/root/.dsh/skills/wb-simcon/SKILL.md` §1；该口实测 115200，baud 以 status 的 `mapping.baudrate` 为准）；会话资源用 `session_id`（`ms-xxxx`），AI 接口内部归一到其 `mapping_id`。`resources:["*"]` 全放行（谨慎）；越权 403，token 无效/过期/撤销 401。
+**资源（resource）**：串口类用 `serial_ports.json` 的 `mapping_id`：`cco-main`、`sta-main`、`listener`（实际 COM 号随接线变化，**调用方优先用 mapping_id，不硬编码 COM 号**）；simcon 口的 task **必须显式 `mapping_id:"simcon"`**（不传会自选 `/dev/ttyS0` 报 `Input/output error`，见 `wb-simcon` §1；该口实测 115200，baud 以 status 的 `mapping.baudrate` 为准）；会话资源用 `session_id`（`ms-xxxx`），AI 接口内部归一到其 `mapping_id`。`resources:["*"]` 全放行（谨慎）；越权 403，token 无效/过期/撤销 401。
 
-> 来源：references/auth.md:23-36；references/operation-guide.md:125-149；references/simeter.md:16；references/auth.md:16-17
+> 来源：ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/simeter.md；ai-control-plane/references/auth.md
 
 ### §2.3 token 用法与两条访问通道
 
@@ -135,7 +134,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 - **v1（专家兼容面）**：所有业务接口都要 Bearer token——**即使 `local_full` 也一样**（如 `GET /api/ai/v1/listener/indexes`）。admin grant 签发/撤销永远要本机 + admin key。
 - **管理辅助**：`GET /api/ai/v1/admin/grants`（列，admin key）、`POST /api/ai/v1/admin/grants/{grant_id}/revoke`（撤销，404）、`GET /api/ai/v1/audit`（审计流水，token + `status:read`，按授权 resources 过滤）。
 
-> 来源：references/api-contract.md:252-255、352-357；references/_归档-门面v2.9.md:134-135、215-218；references/auth.md:38-41；references/operation-guide.md:150-154
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md
 
 ## §3 任务门面 v2（默认 AI 调用面）
 
@@ -160,7 +159,7 @@ curl -s http://127.0.0.1:8790/api/ai/v2/capabilities | python3 -m json.tool
 
 - **已知缺陷 P2-2（尚未修）**：实测该接口返回 11 项能力，但每项 **`id` 为 `null`、`summary` 为空字符串**。**此时不要靠 `id` 选路**——改用 `source_health` ＋ 各子技能里的端点表（条目上可读的还有 `name`/`allowed`/`resources`/`call_examples`）；等 P2-2 修好后再以 `id` 为准。
 
-> 来源：references/api-contract.md:257-259；references/operation-guide.md:18-24；references/_归档-门面v2.9.md:22、161-163
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F8（能力 11 项，`id=null`、`summary=""`）
 
 ### §3.2 八条公开路径
@@ -191,7 +190,7 @@ curl -s http://127.0.0.1:8790/api/ai/v2/capabilities | python3 -m json.tool
 - 把 v1 平铺字段写在上层（顶层 `id`/`profile`/`steps`）会 **422 `Extra inputs are not permitted: id/profile/steps`**——**v1 平铺写法的字段一个都不能带上来，连 `id` 也不行**。
 - `task.mapping_id` 必给（`simcon`/`cco-main`/`sta-main`）；不给会走自动选口、掉到 `/dev/ttyS0` 报 `Input/output error`（见 `wb-simcon` §1）。
 
-> 来源：references/api-contract.md:246-271；references/operation-guide.md:20-28
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F3（T3 实机：平铺 → 422；包 `task` → 202）
 
 ### §3.3 四步低 token 任务流
@@ -224,7 +223,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v2/investigations \
 - **`job_state` 是执行状态，`verdict` 只用于 investigation 观察**（`pass/fail/inconclusive/error`）；module_action / verification_run / flash_job 的 `verdict` 恒 `null`，模块动作/验证/烧录成功**不会**伪装成业务 `pass`。
 - `cleanup=owned_only` 只清理由本任务创建的资源，不关闭人工或 UI 复用的会话。
 
-> 来源：references/operation-guide.md:18-56、78-80；references/api-contract.md:268-271
+> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ### §3.3b 找回最近的 job（2026-10-28 新增）
 
@@ -264,7 +263,7 @@ curl -s "http://127.0.0.1:8790/api/ai/v2/jobs/<job_id>?wait_seconds=30"
 - **读失败原因的顺序（2026-10-28 实测 + 当日修复）**：① `GET /jobs/{job_id}` 看 `result.result.steps[].reason`（构帧/匹配失败的直接原因）；② 同处 `sent_hex`：**为空 = 根本没发出去**，不是「没收到回应」；③ **`GET /jobs/{job_id}/evidence?level=L1`** —— 2026-10-28 `66c8623` 之后**失败任务也会返回证据**（失败步的 `index/name/result/sent_hex/matched/reason`；操作级失败返回一条含 `reason` 的兜底项），不再是空数组；④ `operations.json` 的 `error` 只作最后兜底。
 - 注意：`afn` 写成 `"10H"` 这类格式错，自 `8276bc8` 起**提交就 422**、不建 job；若 step 里出现 `构帧失败: ValueError(...)`，说明跑的是旧版，或缺的是别的键（如 `缺少参数 nid`）。
 
-> 来源：references/_归档-门面v2.9.md:124-126、136-140、150-153；references/operation-guide.md:27、50-52
+> 来源：ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F4（T3 实机：`job-b7d16f008543410b` 的 L1/L2 均 `items:[]`，真因在 `op-3d4f9644840c4d6c.error`）
 
 ### §3.5 证据三级（L1/L2/L3）与 ref 约定
@@ -284,7 +283,7 @@ curl -s "http://127.0.0.1:8790/api/ai/v2/jobs/<job_id>/evidence?level=L3&ref=lis
 - 顺序永远是**先 L1 摘要 → 需要时 L2 明细 → 最后 L3 原始帧**，避免把底层原始日志直接灌进上下文。
 - **四条铁律**：① `sequence` 是日志采集序号，**不能作为协议关联键**，多中转关联只用同一 `index_id` 内的 `app_id + msg_seq + NID + 时间簇`，无 `msg_seq` 的帧标记 `correlation_status=unavailable`；② 分钟采集业务归属**以 `freeze_time` 为准**，L2 同时给 `log_time` 与 `freeze_time`；③ `parse_backend=none` 时保留索引与原始帧查询、缺字段返回 `parse_unavailable`，**不得把未解析帧归入并发抄表或分钟采集**；④ 三级必须同一历史 `index_id`，跨 index 禁止关联；历史日志保留 `index_id`，实时 `not_seen` 且无可信到达时间只能 `inconclusive`（`live_window_unverified`），**不能据此证明"没有发生"**。
 
-> 来源：references/api-contract.md:268-271、312-328；references/operation-guide.md:71-76；references/_归档-门面v2.9.md:127-128
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ### §3.6 listener 语义查询（`trace_query` / `minute_periods`）
 
@@ -305,7 +304,7 @@ listener observation 的 `match.kind` 除 `parsed_frame` / `frame_query` 外，�
 - `raw_hex_contains` 对整帧 `raw_hex` 验证、`app_raw_contains` 对已解析应用载荷验证；前者**仅作末端验证**，删空白后须为偶数长度 2–512 个十六进制字符，**无 `app_id`/NID/时间窗/帧 ID 窗口任一收窄条件时 422**。
 - `minute_periods`：`match` 给 `task_no`（必填）/`period_minutes`/`cco_tei`/`nid`，窗口仅 `time_range`；业务归属**以 `freeze_time` 为准**，L2 同时给 `log_time` 与 `freeze_time`，不得用上报时间替代。
 
-> 来源：references/api-contract.md:273-310；references/operation-guide.md:58-69
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ### §3.7 v1 专家/兼容路径
 
@@ -324,7 +323,7 @@ v1 语义：每接口校验 **scope + resource**；长任务返回 `operation_id
 
 v1 专家 checklist（逐步控制串口或维护旧客户端时才用）：`POST /admin/grants` 拿 token（人做）→ `GET /status` 确认后端就绪与串口在线 → `POST /module-sessions/ensure` → `POST /flash-operations`/`POST /observations`/`POST /simcon/verify` → `GET /operations/{id}/wait` 到终态 → `GET /artifacts/{id}/content` 取证据正文 → 收尾 `POST /module-sessions/{id}/stop`、`/listener/stop`、`/simcon/close`。
 
-> 来源：references/api-contract.md:350-390；references/operation-guide.md:82-86、489-503
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## §4 证据
 
@@ -368,7 +367,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 - `match` **必填**（缺省直接 422），kind 仅 `parsed_frame` / `frame_query`；过滤三件套 `frame_kind`（当前仅 `central_beacon`，留空=任意）、`where`（`{"path":"analysis.full.<字段>","op":"eq","value":...}`，op 目前仅 eq）、`selector`（first/last/all/first_per_minute/nth）。
 - `mapping_id` 用 `listener`（不是 `listener-main`）；字段路径先 `GET /api/ai/v1/listener/schema` 确认；window 同样支持 time_range / cursor_range（须给 `index_id` + `start_frame_id`/`end_frame_id`，跨度 ≤500 帧）。
 
-> 来源：references/observations.md:1-71；references/operation-guide.md:234-253
+> 来源：ai-control-plane/references/observations.md；ai-control-plane/references/operation-guide.md
 
 ### §4.2 证据落盘与 operation 状态机
 
@@ -377,7 +376,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 - **落盘自检**：① 每条结论都要能指到一个 `artifact_id` 或 `ref=listener:<index_id>:<frame_id>`，不能只写"看到了"；② 历史证据必须带 `index_id`，跨索引关联一律不采信；③ 不把 raw_hex/原始日志整段复制进上下文或报告，只给 ref 与必要片段（L1 优先）；④ 全链路验证的落盘位置是 `GET /api/run/{id}/report`、`/artifacts`、`/artifacts/{artifact_id}`（有路径越界防护）。
 - **三种"看起来成功"的坑**：job `succeeded` 只代表任务跑完（业务结论另看 summary/verdict）；`verification_run` summary 写 `fail (0 pass/1 fail)` 时不得写"验证通过/烧录成功"；live 窗 `not_seen` 判 `inconclusive` 时只能报"未观测到，证据不足"。
 
-> 来源：references/operation-guide.md:254-269、476；references/observations.md:66-71；references/_归档-门面v2.9.md:150-153；references/api-contract.md:404
+> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/observations.md；ai-control-plane/references/api-contract.md
 
 ## §5 编排与页面
 
@@ -395,7 +394,7 @@ curl -X POST http://127.0.0.1:8790/api/run \
 - 其余：`GET /api/runs?limit≤200`（历史）、`POST /api/compare`、`POST /api/feedback`（比对/归因，不落 Run）。整链是烧录→监控→激励→比对→反馈→报告。
 - 与 AI 控制面的取舍：要**授权审计/证据链/幂等**走 `/api/ai/v1`；只是**直接驱动一次全链路验证拿报告**，`/api/run` 更短（无 token、无 operation）。
 
-> 来源：references/operation-guide.md:467-479；references/api-contract.md:392-407；references/features.md:69-77
+> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/features.md
 
 ### §5.2 前端调用方映射（页面 → API 组 → 前缀机制）
 
@@ -409,13 +408,13 @@ curl -X POST http://127.0.0.1:8790/api/run \
 | `pages/serial-profile/serial-profile.js` | 串口 Profile | `API_BASE`（`/api`） |
 | AI agent（无页面） | v2（默认）/ v1（专家兼容） | 直连 8790 `/api/ai/v2`；需要旧细粒度能力时 `/api/ai/v1` |
 
-> 来源：references/api-contract.md:437-449
+> 来源：ai-control-plane/references/api-contract.md
 
 ### §5.3 与页面操作的关系
 
 AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / listener service）：串口同一时刻独占，**页面与 AI 不能同时开同一串口**（409）。ADR-27 修的前端 bug（`ms-refresh-speed` 缺失导致实时日志页无反应）**不影响 API 行为**；主题/保活只影响页面观感（§8 G1/G2），与 AI 调用面无关。
 
-> 来源：references/operation-guide.md:516-519
+> 来源：ai-control-plane/references/operation-guide.md
 
 ## §6 契约红线（完整版）与通用约定
 
@@ -428,20 +427,18 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 - 统一错误响应（D-04）：`{code, message, details, request_id}`，兼容旧 `detail` 字段。
 - 侦听台深度解析三档 `parse_backend`（local/remote/none，REQS-0019）：`none` 时帧仍可查但无深度字段，先起 Windows 解析网关——**仅 Windows 侧、由人执行**（桌面 `wsl环境部署.bat` → [4]，或 `powershell -File tools/scripts/uart-map.ps1 -Action start-gateway`，相对 `<WORKBENCH_ROOT>`）。
 
-> 来源：references/_归档-门面v2.9.md:213-231；references/api-contract.md:51-62
+> 来源：ai-control-plane/references/api-contract.md
 
 ### §6.2 行为红线（8 条，完整表述）
 
 1. **授权归人、scope 最小化**：`admin/grants` 只由人本机执行（127.0.0.1 + admin key）；AI 只使用已有 token，不自签、不扩权、不转交。只申请本次任务需要的 scope（§2.2），能不给 `resources:["*"]` 就不给。
 2. **用完即止**：完成本次任务即停——不开任务外的会话、不跑任务外的验证、不做"顺手"的全流程；结束前把本次开的会话/采集/串口收尾（§3.7）。
 3. **串口独占**：同一物理串口同一时刻一个持有者（AI 与前端共享规则）；开了就关（stop/close 释放；v2 stop 卡 waiting 时以物理串口释放为准）；409 时等待或换口，**不硬抢、不并发重试**。
-4. **开串口前先 preflight**：先 `/api/serial-bridge/status` + `/verify`；`workbench_ready=false` 时不许 ensure/open（细节见 `/root/.dsh/skills/wb-serial/SKILL.md`）。
+4. **开串口前先 preflight**：先 `/api/serial-bridge/status` + `/verify`；`workbench_ready=false` 时不许 ensure/open（细节见 `wb-serial`）。
 5. **观察先建后造**：先 `observations` 再制造目标事件；module_log 只盯创建之后的新日志，事后补观察等于没观察。
 6. **不可取消的操作耐心等终态**：烧录/verify 不并发重试（v2 `flash-jobs`/`verification-runs`，v1 `flash-operations`/`simcon/verify`）。simcon verify 默认 240s 总看门狗（`WORKBENCH_VERIFY_TIMEOUT_S` 可覆盖），超时落 `error` 并复位运行守卫，后续提交不会再被 409 永久拒绝。
 7. **禁用 `pkill/pgrep -f` 匹配自身**：`pkill -f "workbench.run"` 会命中执行该命令的 shell 自身（bash -c 命令行含明文串），误杀自身；停止工作台先 `pgrep -af "[w]orkbench.run"` 取 PID 再 kill，或直接终止受管后台任务。
 8. **agent 沙箱禁用 nohup 常驻**：nohup 子进程随外层 shell 结束被回收（实测），必须用受管后台任务常驻；桌面/WSL 人机环境才可用 nohup。
-
-> 来源：references/_归档-门面v2.9.md:232-248、141-143、164-172
 
 ### §6.3 契约红线（改接口/改页面时的检查清单）
 
@@ -456,7 +453,7 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 9. **v2 是默认低 token 任务入口；v1 保持专家兼容**，不得因库存收敛而删除或改名。
 10. **主题（REQS-0012）**：`html[data-theme]` + `--theme-registry` 单一数据源；新增主题只改 `tokens-v2.css` 一处；iframe 内页面需带防闪跳 boot 脚本与 `wb-theme-change` 监听。
 
-> 来源：references/api-contract.md:451-462
+> 来源：ai-control-plane/references/api-contract.md
 
 ## §7 错误码速查（常见错误 → 原因 → 处置）
 
@@ -472,7 +469,7 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 
 定位顺序：先看响应体 `{code, message, details, request_id}`，再对照本表，**不要凭状态码猜业务原因**；仍走异步的 error 原因去 `<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json` 查该 op 的 `error`（evidence 可能全空，见 §3.4）。
 
-> 来源：references/operation-guide.md:505-514；references/_归档-门面v2.9.md:136-140、225-226；references/api-contract.md:51-57、354；references/auth.md:21
+> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/auth.md
 
 ## §8 已知缺口
 
@@ -484,7 +481,7 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 | G4 | 侦听台依赖 C# DLL/pythonnet，缺失时挂载降级；`parse_backend=none` 时缺解析字段 | workbench 挂载层 / 侦听台解析后端 | `listener_mounted=false`、`/parse` 降级 503、`parse_unavailable` | 采帧与索引照用，不把未解析帧归入业务分类；要字段就起 Windows 解析网关（仅人执行，§6.1） |
 | G5 | `.md` 路由表不被库存脚本校验 | `verify_api_inventory.py` | 只校验 v2 8 条路由命名 schema、AI 能力映射、listener schema 能力位 | 改接口时按 §6.3 第 1 条人工同步文档并跑契约测试 |
 
-> 来源：references/api-contract.md:464-477、338-348；references/features.md:21、77；references/operation-guide.md:516-519
+> 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/features.md；ai-control-plane/references/operation-guide.md
 
 ---
 
@@ -493,4 +490,4 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 精确契约在入口技能事实库：`auth.md`(43) 授权原文、`features.md`(119) 能力全表、`observations.md`(72) 观察语义、
 `api-contract.md`(491) §1/§2/§6/§6.1/§7/§10/§11/§12、`operation-guide.md`(520) §1/§2/§3/§7/§11–§15。
 旧门面归档：`_归档-门面v2.9.md`(257)，仅当新文档查不到时参考。
-> 路径前缀：/root/.dsh/skills/ai-control-plane/references/
+> 路径前缀：ai-control-plane/references/

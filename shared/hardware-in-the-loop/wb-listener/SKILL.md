@@ -5,7 +5,7 @@ argument-hint: "[任务，例如 查这批 0003 帧断在哪一跳 / 解释 rslt
 metadata:
   author: reasonix
   version: "1.0.0"
-  applies-to: 任意工作区（<WORKBENCH_ROOT> 路径根解析见 /root/.dsh/skills/wb-base/SKILL.md）
+  applies-to: 任意工作区（<WORKBENCH_ROOT> 路径根解析见 wb-base）
   source: 拆自 ai-control-plane（2026-10-28）
 ---
 
@@ -13,11 +13,11 @@ metadata:
 
 本技能只讲**侦听台**（起停采集、7E 原始日志建索引、已解析帧查询、通信流追踪三段证据链）
 与**组网诊断判读**（入网/离网/冲突/信标的症状→查什么→判据）。
-归别的子技能的事：帧解析/构帧/离线回验 → `/root/.dsh/skills/wb-appframe/SKILL.md`；
-开串口前的桥 preflight、mapping_id 与端口映射、波特率/线参 → `/root/.dsh/skills/wb-serial/SKILL.md`；
-v2 任务门面、token/scope、evidence L1/L2/L3 下钻 → `/root/.dsh/skills/wb-base/SKILL.md`；
-分钟采集缺报对账（freeze_time 权威口径）→ `/root/.dsh/skills/mclt-collect-analysis/SKILL.md`；
-模拟电表 → `/root/.dsh/skills/wb-simeter/SKILL.md`；模拟集中器 → `/root/.dsh/skills/wb-simcon/SKILL.md`。
+归别的子技能的事：帧解析/构帧/离线回验 → `wb-appframe`；
+开串口前的桥 preflight、mapping_id 与端口映射、波特率/线参 → `wb-serial`；
+v2 任务门面、token/scope、evidence L1/L2/L3 下钻 → `wb-base`；
+分钟采集缺报对账（freeze_time 权威口径）→ `mclt-collect-analysis`；
+模拟电表 → `wb-simeter`；模拟集中器 → `wb-simcon`。
 
 ## 0. 三种取帧来源怎么选（先选来源，再看参数）
 
@@ -29,7 +29,7 @@ v2 任务门面、token/scope、evidence L1/L2/L3 下钻 → `/root/.dsh/skills/
 | 帧查到了但**字段是空的** | 不是取帧问题，是解析后端档位 | `GET /api/version` → `parse_backend`（§5） | `none` 需 Windows 侧起网关，人在 Windows 执行 |
 
 判读顺序恒为「先有来源 → 再取帧 → 再判读」；**不要在没有索引的情况下凭页面印象下结论**。
-> 来源：references/listener.md:1-2；references/api-contract.md:72-75,87-108；references/operation-guide.md:271-277
+> 来源：ai-control-plane/references/listener.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## 1. 实时观察：起停采集（server 侧管串口）
 
@@ -47,10 +47,10 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/listener/stop \
 - `listener:stop` 校验的 resource：在线时为当前 `mapping_id`（`listener`），离线回退
   `listener-main`；窄授权（`resources` 非 `*`）需**两者都包含**。
 - 串口独占：采集中禁止开日志索引（409），索引中禁止启动采集（409）；409 是资源冲突不是故障。起采集前先跑 `/api/serial-bridge/status` + `/verify`，`workbench_ready=false` 不要 ensure
-  （字段判读见 `/root/.dsh/skills/wb-serial/SKILL.md`）。
+  （字段判读见 `wb-serial`）。
 - 串口级参数（`port`/`baudrate 300-921600`/`bytesize 5-8`/`parity N/E/O`/`stopbits 1-2`）属 `/api/serial/start|stop`，同样走侦听台子应用；本技能按 `mapping_id` 走。
 
-> 来源：references/listener.md:3-15；references/api-contract.md:51-62,149-157；references/operation-guide.md:278-291
+> 来源：ai-control-plane/references/listener.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## 2. 7E 原始日志 → 索引（离线排查标准入口）
 
@@ -76,10 +76,10 @@ curl "http://127.0.0.1:8790/api/ai/v1/listener/indexes/<index_id>/frames?offset=
   状态码：202 受理 / 404 路径不存在 / 409 串口采集中 / 503 后端不可用。**互斥**：串口采集中返回 409 —— 先 `listener/stop` 再建索引。
 - 建索引后 `GET /api/listener/indexes`、`indexes/{id}/frames` 即可用；索引库
   `apps/listener/runtime/indexes/idx-*.sqlite3` 同时生成，可只读 SQL 直查（数据源表口径见
-  `references/offline-analysis.md`，入口见 `/root/.dsh/skills/wb-appframe/SKILL.md`）。
+  `ai-control-plane/references/offline-analysis.md`，入口见 `wb-appframe`）。
 - 文件系统辅助：`GET /api/fs/roots`、`/api/fs/list?path=`、`/api/fs/last`；`/api/fs/pick` 弹原生框，非 Windows 返回 501。
 
-> 来源：references/listener.md:16-39；references/api-contract.md:87-108,76-86；references/operation-guide.md:292-303
+> 来源：ai-control-plane/references/listener.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## 3. 已解析帧查询与通信流追踪
 
@@ -101,7 +101,7 @@ curl "http://127.0.0.1:8790/api/ai/v1/listener/indexes/<index_id>/frames/<frame_
 - 双前缀特例（别"修正"它）：子应用自身有 `/api/listener/*` 路由（traces、indexes），经挂载前缀叠加后外部路径是 **`/api/listener/listener/traces`**；indexes 同时暴露两条，故 `/api/listener/indexes/...` 与 `/api/listener/listener/indexes/...` **都有效**。
 - 附带只读统计：`GET /api/concurrent/stats?period=15m|30s|1h|900`（最大并发/成功率/平均耗时/重复下发，来源=收发库 frame_log 的 AFN=F1/FN=F1，**不发帧**）。
 
-> 来源：references/listener.md:41-55；references/api-contract.md:27-50,87-108；references/operation-guide.md:292-303
+> 来源：ai-control-plane/references/listener.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ### 3.2 通信流追踪（三段证据链：S1 发出 → S2 ACK/响应 → S3 接收）
 
@@ -129,15 +129,15 @@ curl http://127.0.0.1:8790/api/ai/v1/listener/traces -H "Authorization: Bearer <
 - 报告结构：`summary`（rounds/meters/full_chain/no_ack/no_response/denied/no_confirm）+ `rounds[]`（时间簇 → `flows[]` 状态机链 `sent→acked→responded→confirmed/denied/timeout`，每阶段挂 `frame_id` 可回帧详情钻取；`meter_table` 表地址 ok/denied/missing 三分类）+ `proxy_graph`（表地址→应答 STA 代理观测）+ `bad_frames`（坏帧只计数，不参与判定）。
 - 状态码 422 参数非法 / 503 后端不可用；`DELETE /traces/{trace_id}` 停止并移除 live 句柄（坏帧只计数）。
 
-> 来源：references/listener.md:57-87；references/operation-guide.md:304-343；references/api-contract.md:140-148
+> 来源：ai-control-plane/references/listener.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ### 3.3 分钟采集口径（只给指针，细讲不在这里）
 
 「分钟采集分析」页面的分桶键是 `time_seconds % period_ms`（**上报时刻**），权威归属是 `freeze_time`
 （冻结时刻）；迟报/补采时两者不一致会造出**假缺报**。完整口径（分桶 SQL、`/listener/minute-periods`
 参数 `task_no`/`cco_tei`/`period_minutes 1–1440`/`nid`/`start_time`/`end_time`、REQS-0018）见
-`/root/.dsh/skills/mclt-collect-analysis/SKILL.md` 与 `references/listener.md:89-127`；v2 语义查询
-（`investigations` 的 `trace_query`/`minute_periods`、L1/L2/L3 下钻）见 `/root/.dsh/skills/wb-base/SKILL.md`。
+`mclt-collect-analysis` 与 `ai-control-plane/references/listener.md`；v2 语义查询
+（`investigations` 的 `trace_query`/`minute_periods`、L1/L2/L3 下钻）见 `wb-base`。
 
 ## 4. 网络诊断：症状 → 查什么 → 判据
 
@@ -234,7 +234,7 @@ UNASSOC ──关联确认成功──► ONNET ──第1个心跳周期无心�
 2. **时隙参数**：VCS 前导忙协议 EIFS 20/70ms、实现 `HPLC_EIFS/12`≈1.67ms 与 `RF_EIFS/8`；CSMA 最小退避指数 minBE=4（注释"由 2 改为 4"）、maxBE=8。
 3. **时间/类型/路由**：掉电第一阶段文案 80s、实现 70000ms，上电波特率探测只轮换 9600E/115200N/115200E 三档；定界符类型 0=信标帧（MAC 帧控制）而 `table38_stuff_type` 填 2 表示"中央信标"，两个"类型"不是一回事；RouteError 仅解析不联动删路由、LinkConfirmRequest 构帧未发送。
 
-> 来源：references/network-diagnostics.md:1-111；references/api-contract.md:119-139
+> 来源：ai-control-plane/references/network-diagnostics.md；ai-control-plane/references/api-contract.md
 
 ## 5. 解析后端：本地 / Windows 网关 / 无（REQS-0019）
 
@@ -246,7 +246,7 @@ UNASSOC ──关联确认成功──► ONNET ──第1个心跳周期无心�
 - **起网关（Windows 侧，需人在 Windows 执行）**：桌面 `wsl环境部署.bat` → [4] 启动 / [5] 停止；或 `powershell -File <WORKBENCH_ROOT>/tools/scripts/uart-map.ps1 -Action start-gateway`（详见 `<WORKBENCH_ROOT>/tools/scripts/README.md`）。WSL/Linux 侧无此步骤。
 - **排查提示**：帧缺协议明细时先看 `parse_backend`；`none` → 先起网关再继续，别怀疑数据/链路；窄带（双模 HPLC/RF）报文的深度字段同样依赖该档位，Linux 侧无法自足。
 
-> 来源：references/listener.md:128-141；references/operation-guide.md:271-277；references/api-contract.md:76-86
+> 来源：ai-control-plane/references/listener.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ## 6. 红线
 
@@ -261,7 +261,7 @@ UNASSOC ──关联确认成功──► ONNET ──第1个心跳周期无心�
 - 源文件与已读小节见文末附录；判级规则库：`libs/network_assert/rules/*.json`（相对 `<WORKBENCH_ROOT>`）；用例库 `/api/dict/cases`。
 - 解析依据：`libs/parser_lib/adapters/adapter_dualmac/`（GW 封装剥离 + 4-2 表 13/4/17/19/23/26/30/34/38/47/48/49/50/54/55/57 + NWK 管理帧 table60/70/76/79/84/88/91/94/100/102/111/114/117/118/121）；NID 展示为 24bit 小端十六进制（如 947F69），查询同时匹配字节序反转写法（697F94）。
 
-> 来源：references/network-diagnostics.md:107-111；references/api-contract.md:135-139
+> 来源：ai-control-plane/references/network-diagnostics.md；ai-control-plane/references/api-contract.md
 
 ---
 
@@ -271,10 +271,10 @@ UNASSOC ──关联确认成功──► ONNET ──第1个心跳周期无心�
 
 | 文件 | 该读哪一节 | 行数 |
 |---|---|---|
-| /root/.dsh/skills/ai-control-plane/references/listener.md | 侦听台全部端点与索引/帧查询细节 | 184 |
-| /root/.dsh/skills/ai-control-plane/references/network-diagnostics.md | 入网/离网/冲突/信标的判据全表 | 112 |
-| /root/.dsh/skills/ai-control-plane/references/api-contract.md | §3 侦听台契约 | 491 |
+| ai-control-plane/references/listener.md | 侦听台全部端点与索引/帧查询细节 | 184 |
+| ai-control-plane/references/network-diagnostics.md | 入网/离网/冲突/信标的判据全表 | 112 |
+| ai-control-plane/references/api-contract.md | §3 侦听台契约 | 491 |
 
-- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：/root/.dsh/skills/ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
+- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
 
 > 铁律：事实库里改动只改一处；子技能里**不复制**事实库内容，避免两份说法打架。

@@ -4,20 +4,22 @@ description: 什么时候用我：要让模拟集中器（simcon）在 CCO 本�
 argument-hint: "[任务，例如 跑一遍 anhui 验证任务 / 只等 06H-F230 上报 30 秒 / 预检 10H-F230 构帧 / 查本次运行发了哪些帧]"
 metadata:
   author: reasonix
-  version: "1.0.0"
-  applies-to: 任意工作区（<WORKBENCH_ROOT> 路径根解析见 /root/.dsh/skills/wb-base/SKILL.md）
+  version: "1.2.0"
+  applies-to: 任意工作区（<WORKBENCH_ROOT> 路径根解析见 wb-base）
   source: 拆自 ai-control-plane（2026-10-28）
 ---
+
+> v1.1.0（2026-11-03）：REQS-0037 — 新增分钟采集语义步骤 `wait_mclt_stored` / `read_mclt_11e3`、`GET /store/mclt` F230 存数查询；加 11E3 注入不可达警示（CCO 冻结后约 9min 自主发起）。
 
 # 模拟集中器：验证任务 / 单步下发 / 帧日志（wb-simcon）
 
 本技能只讲**模拟集中器**这一条路：`/api/ai/v1/simcon/*`（带 token 的 AI 面）与
 `/api/simcon/*`（直连面，无 Bearer）、必需参数、会话/run_id 取帧、并发准入与证据纪律。
-归别的子技能的事：开串口前的桥 preflight 与映射判读 → `/root/.dsh/skills/wb-serial/SKILL.md`；
-模拟电表 sim_meter（645 从站）→ `/root/.dsh/skills/wb-simeter/SKILL.md`；
-离线构帧/回验（不碰串口）→ `/root/.dsh/skills/wb-appframe/SKILL.md`；
-侦听台取证与组网诊断 → `/root/.dsh/skills/wb-listener/SKILL.md`；
-授权签发、token/scope、v2 任务门面 → `/root/.dsh/skills/wb-base/SKILL.md`。
+归别的子技能的事：开串口前的桥 preflight 与映射判读 → `wb-serial`；
+模拟电表 sim_meter（645 从站）→ `wb-simeter`；
+离线构帧/回验（不碰串口）→ `wb-appframe`；
+侦听台取证与组网诊断 → `wb-listener`；
+授权签发、token/scope、v2 任务门面 → `wb-base`。
 
 ## 0. 三类动作怎么选（先选动作，再核参数）
 
@@ -31,7 +33,7 @@ metadata:
 
 选完动作再核 §2 的必需参数表：**参数不全会以 422 死在构帧阶段**，别把它当成链路问题。
 
-> 来源：references/simcon.md:1-2,14-27,28-46；references/api-contract.md:195-222；references/operation-guide.md:344-349
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## 1. 前置（每次开 simcon 之前）
 
@@ -45,12 +47,12 @@ metadata:
 > **前置（每次开 simcon 之前）**：先跑 `/api/serial-bridge/status` + `/verify`，确认**目标口**
 > `workbench_ready=true`（别的口离线不算失败）。`simcon` 口实测 **115200/E/8/1**（映射 baud 115200，
 > 2026-10-28）；**baud 以 `/api/serial-bridge/status` 的 `mapping.baudrate` 为准，勿记档位**。
-> CCO 复位用本地 `01H-F1`；14-F2 匹配 `fn:2`（不是 242）。细节见 `references/serial-bridge.md`。
+> CCO 复位用本地 `01H-F1`；14-F2 匹配 `fn:2`（不是 242）。细节见 `ai-control-plane/references/serial-bridge.md`。
 
 > resource 固定 `simcon`；所有收发的 1376.2 帧都会进**会话帧日志**并持久化到
 > `data/logs/simcon/sc-*.jsonl`。
 
-> 来源：references/simcon.md:3-12；references/operation-guide.md:346-348；references/serial-bridge.md:104
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/serial-bridge.md
 > 来源：validation-20261028/F2（T3 实机：不传口→`/dev/ttyS0` EIO；显式 `mapping_id:"simcon"`→115200/N 成功）
 
 ## 2. 必需参数表（本技能的核心，逐动作核对）
@@ -102,7 +104,7 @@ metadata:
 
 判「对端有没有反应」**必须带 `expect`**；别拿"仅下发"的 pass 当成功（2026-10-28 实测 job-9da077347b8a4749 / op-8f81c527a9a64fe4）。
 
-> 来源：references/simcon.md:20-25,31-46；references/api-contract.md:205-213；references/operation-guide.md:350-390,425-428
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## 3. 跑验证任务（异步，不可取消）
 
@@ -125,7 +127,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v2/verification-runs -H "Content-Type:
 - v2 job 的 `succeeded` 只代表跑完，业务结论看 `summary`（形如
   `verification_run succeeded: pass (1 pass/0 fail)`）；失败时 L1/L2 可能是空的，看
   `<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json` 里该 op 的 `error`
-  （口径见 `/root/.dsh/skills/wb-base/SKILL.md` §3.4）。
+  （口径见 `wb-base` §3.4）。
 
 ```bash
 # 有 token：v1 专家面（同一套验证）
@@ -147,7 +149,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/verify \
   轮询 `GET /api/run/<id>`、报告 `/<id>/report`、产物 `/<id>/artifacts`、取消 `POST /<id>/cancel`）；
   要授权审计/证据链/幂等则走本节 v1 路径。
 
-> 来源：references/simcon.md:14-27；references/operation-guide.md:350-365,467-480；references/api-contract.md:205,379-391
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 > 来源：validation-20261028/F3（T3 实机：平铺 v1 body → 422 `Extra inputs are not permitted: id/profile/steps`；包 `task` 后 202）
 
 ## 4. 单步下发 / 只等一帧（同步）
@@ -175,7 +177,51 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/step \
 - 应答规则可查：`GET /api/simcon/expect_rules`（`deny_codes`、`timeout_tiers`、`no_expect_afn`）
   与 `GET /api/simcon/responders`（内置+覆盖）。
 
-> 来源：references/simcon.md:28-46；references/api-contract.md:206-212；references/operation-guide.md:366-390
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
+
+### 4.1 分钟采集语义步骤与 F230 存数查询（REQS-0037）
+
+> **警示 · 11E3 注入不可达（2026-11-03 台架×2 实测）**：**11E3 由 CCO 在冻结后约 9min 自主发起，simcon 交互口 raw 注入 11E3 实测不可达**。正确姿势：配任务 → 等 F230 存数（判据）→ CCO 自主补抄 → 工作台/断言库核帧。
+
+`verify.steps[]` 新增两个分钟采集语义步骤（与 `send` 平级，写进步骤字典）：
+
+| 步骤 | 字段 | 作用 |
+| --- | --- | --- |
+| `wait_mclt_stored` | `{"task_id":X,"timeout_s":900,"poll_s":5}` | 轮询 F230 入库（15min 冻结周期，默认 900s 封顶、5s 一询）；冻结时刻写入步骤上下文 |
+| `read_mclt_11e3` | `{"task_id":X,"freeze_time":"auto"\|"YYYY-MM-DD HH:MM:SS"}` | 构 11E3 校验 task_id 回显与 result；`"auto"` 取 wait 步骤上下文里的冻结时刻；**仅在 verify 任务面可用** |
+
+组合示例（配任务 → 等存数 → 等补抄核帧）：
+```bash
+curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/verify \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"id":"mclt1","profile":"anhui","mapping_id":"simcon",
+       "steps":[{"name":"s1","send":{"afn":"10","fn":"F230","params":{"task_id":1}}},
+                {"name":"s2","wait_mclt_stored":{"task_id":1,"timeout_s":900,"poll_s":5}},
+                {"name":"s3","read_mclt_11e3":{"task_id":1,"freeze_time":"auto"}}],
+       "client_request_id":"v-mclt-001"}'
+```
+
+- **新端点 `GET /api/simcon/store/mclt?limit=N`**：F230 明细（持久化库，直连面无 Bearer），行含 `frame_id` 可回溯到会话帧日志。
+- **分桶**：`GET /api/simcon/report_buckets` 已有 F230 桶（`by_task` / `by_proto`），查上报分布先看它。
+
+> 来源：REQS-0037（2026-11-03 台架实测）；libs/sim_concentrator
+
+### 4.1.1 脚本与场景复用索引（req006 沉淀）
+
+> **分钟采集台架验证先查这里，不要重新造脚本。**
+
+- **脚本**：`tools/scripts/minute_collect/`（索引见其 README.md）——`mclt_list_query.py`
+  （`sta show mclt_list` 查询+表体解析）、`build_8505_block.py`（85 05 分块响应帧构造，
+  离线）、`build_link_frames.py`（链路层分帧序列 00/11/01，离线）、
+  `inject_8505_blocks.py`（等 85 05 GET → send_hex 分块注入编排，需 simeter 开口）。
+- **场景**：`apps/workbench/scenarios/chongqing_mclt_recheck_0037.json`（0037 复测：
+  配 F231/F232 → wait_mclt_stored → read_mclt_11e3，task 0/1/15）；
+  `minute_collect.json`（安徽版基础）。
+- **构帧/断言库（只 import，不复制）**：`libs/sim_concentrator/mclt_e3.py`（11E3
+  APS 24B 构帧/解析）、`libs/minute_assert`（11E3/06H-F230/内层 698 全链路断言，
+  63 项自测）、`libs/parser_lib/adapters/adapter_698/build_frame`（698 链路层事实源）。
+- **坑**：11E3 不可由 simcon 交互口注入（CCO 冻结后自主发起）；内层 698 分块是
+  85 05（读块），`minute_assert.parse_inner_698` 只认 85 02，勿混。
 
 ## 5. 会话与 run_id 取帧日志
 
@@ -216,7 +262,7 @@ curl "http://127.0.0.1:8790/api/ai/v1/simcon/store/snapshots/1" \
 - 区别：`/simcon/frames` 是**本次会话**的帧序列（`sc-*.jsonl`，实时）；store 是**持久化库**，
   跨会话保留（按天滚动 5 天）。查"刚才那批"用 frames，查"前天那批上报落库没有"用 store。
 
-> 来源：references/simcon.md:47-62,69-91；references/operation-guide.md:391-410；references/api-contract.md:214-218
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ## 6. 会话管理
 
@@ -233,7 +279,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/simcon/close \
   显式管理；close 释放串口，日志保留可查。
 - 单步下发会自动开会话；用完即 `close`，别把口长时间占着。
 
-> 来源：references/simcon.md:63-68；references/operation-guide.md:411-421；references/api-contract.md:196-201,218
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ## 7. 语义构帧预览与内置应答（无鉴权辅助端点）
 
@@ -251,7 +297,7 @@ curl http://127.0.0.1:8790/api/simcon/responders
 `build` 是 §2.2 的下发前编译步骤，`GET /status`（`{open, port, mapping_error, pending_frames, session}`）
 与 `GET /ports` 也在这层，可先看口开没开。
 
-> 来源：references/simcon.md:92-96；references/operation-guide.md:422-435；references/api-contract.md:196-201,213
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
 ## 8. 并发与准入（谁在占口 → 为什么 409）
 
@@ -283,7 +329,7 @@ curl http://127.0.0.1:8790/api/simcon/responders
   两份"证据"都无法归因——发现混流就作废本批、重新独占跑一遍，不要挑一份像样的交差。
 - 跨批对比时先对齐 `profile` 与 `expect_rules` 版本，否则判定口径不同，比出来的是假差异。
 
-> 来源：references/operation-guide.md:346-349,363-365；references/api-contract.md:51-62,195-222；references/simcon.md:9-12,26；references/serial-bridge.md:104；REQS.md:31（P1-1 需求口径，未实现）
+> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/simcon.md；ai-control-plane/references/serial-bridge.md；REQS.md（P1-1 需求口径，未实现）
 
 ## 11. 档案区与 15 分钟搜表（2026-10-28 落地）
 
@@ -330,6 +376,14 @@ python3 tools/scripts/search_meter.py --minutes 15             # 真跑，约 15
 
 > 来源：协议层/03_QGDW10376.2_全帧类型.md §2.8 DT 映射、§11 F1/F5；业务层/86_档案自动同步_业务.md 6.4；协议层/94 卡（白名单过滤方式）；2026-10-28 实机
 
+## 8.1 验证任务硬约束(2026-11-04 实测)
+
+1. **单 verify 任务 240s 总超时硬闸**:底层线程超时被强杀,报"验证总超时 240s…已废弃本次任务"。长等待步骤(wait_mclt_stored timeout_s>180、expect_timeout>180)必须拆成多轮短窗 job,在客户端循环。
+2. **强杀后僵尸会话占口**:再提交报 `串口已被后端会话"模拟集中器"占用`,lease 仍显示空闲;处置=`POST /api/simcon/close` 释放后重试(不要反复重提)。
+3. **F230 存数库只在本会话开启期间累积**:06H-F230 上报落在无会话窗口即丢失,store/mclt 最新记录可能停在数小时前;存数类判据必须让会话覆盖上报窗口,别把历史记录当"刚存数"。
+4. **10-F104 构帧已修复**(2026-11-04):(0x10,104) 移出 `_NO_UNIT_DOWN`,并入 10-F21 家族"起始序号 2B 小端+数量 1B";`build` 传 `{"start":0,"count":3}` 出 18B 带参帧;上行格式=总数量u16le+本次u8+地址6B+版本日期5B+厂商ASCII4B(台架实值如 CF8F)。
+5. **STA 模块日志捕获可能停更**:以 STA 日志为判据前先看 `data/logs/模块/sta/*.log` mtime,停更即换判据或标 partial。
+
 ## 9. 红线
 
 1. **不可取消的不重试**：`verify` 与烧录一样提交即跑完；卡住就等 `wait` 到终态，不并发重提。
@@ -342,9 +396,9 @@ python3 tools/scripts/search_meter.py --minutes 15             # 真跑，约 15
 
 ## 10. 参考
 
-- 源文件（老门面，只读）：`references/simcon.md`、`references/api-contract.md`（§1.1/§1.2/§5）、
-  `references/operation-guide.md`（§9.1-§9.5）、`references/serial-bridge.md`（preflight 与映射表）。
-- 直连面无 token 的一组（并发抄表/档案/recipes/统计，契约见 `references/api-contract.md` §5）：
+- 源文件（老门面，只读）：`ai-control-plane/references/simcon.md`、`ai-control-plane/references/api-contract.md`（§1.1/§1.2/§5）、
+  `ai-control-plane/references/operation-guide.md`（§9.1-§9.5）、`ai-control-plane/references/serial-bridge.md`（preflight 与映射表）。
+- 直连面无 token 的一组（并发抄表/档案/recipes/统计，契约见 `ai-control-plane/references/api-contract.md` §5）：
   `POST /api/simcon/batch_read`（`meters[]`、`max_concurrent=5`、`mode=single|batch`、`protocol_type=2`）、
   `GET /api/simcon/batch_read/{job_id}`、`POST /api/simcon/batch_read/{job_id}/stop`、
   `GET /api/simcon/recipes`、`POST /api/simcon/recipes/add_archive/run`、
@@ -354,7 +408,7 @@ python3 tools/scripts/search_meter.py --minutes 15             # 真跑，约 15
 - 配置事实源（相对 `<WORKBENCH_ROOT>`）：`apps/workbench/scenarios/profiles/*.json`、
   `serial_ports.json` 映射；应答规则库经 `GET /api/simcon/expect_rules` 现取，勿凭记忆写死档位。
 
-> 来源：references/simcon.md:92-119；references/api-contract.md:195-222；references/operation-guide.md:344-435
+> 来源：ai-control-plane/references/simcon.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 
 ---
@@ -365,10 +419,10 @@ python3 tools/scripts/search_meter.py --minutes 15             # 真跑，约 15
 
 | 文件 | 该读哪一节 | 行数 |
 |---|---|---|
-| /root/.dsh/skills/ai-control-plane/references/simcon.md | 验证任务/单步/帧日志/并发抄表/档案全表 | 120 |
-| /root/.dsh/skills/ai-control-plane/references/api-contract.md | §5 simcon 契约 | 491 |
-| /root/.dsh/skills/ai-control-plane/references/operation-guide.md | §9.1-9.5 原始操作步骤与示例 | 520 |
+| ai-control-plane/references/simcon.md | 验证任务/单步/帧日志/并发抄表/档案全表 | 120 |
+| ai-control-plane/references/api-contract.md | §5 simcon 契约 | 491 |
+| ai-control-plane/references/operation-guide.md | §9.1-9.5 原始操作步骤与示例 | 520 |
 
-- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：/root/.dsh/skills/ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
+- 旧门面归档（v2.9 路由表、实测校准段、REQS 编号索引）：ai-control-plane/references/_归档-门面v2.9.md（257 行，**仅当新文档查不到时**参考）
 
 > 铁律：事实库里改动只改一处；子技能里**不复制**事实库内容，避免两份说法打架。

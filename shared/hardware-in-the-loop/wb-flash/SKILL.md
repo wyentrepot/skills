@@ -31,7 +31,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 - **放行会留审计**：成功的放行会写一条 `store.audit(action="flash.authorization")`，含 `authorization_source`（`grant` / `env` / `local_full_env`）、`bin_path`、命中的 root、`operation_id`。要回答"这次烧录凭什么被允许"，查这条。注意：**审计条数 ≠ 烧录次数**（每次放行都记一次，同键重提也算一次放行）。
 - **团队红线不变**：烧录必须由人授权；不许因为"env 能顶"就跳过查 1，也不许靠重启工作台塞 env 给自己开白名单。
 
-> 来源：references/auth.md:6-21、references/module-serial.md:65、交接-20261028.md:66
+> 来源：ai-control-plane/references/auth.md、ai-control-plane/references/module-serial.md、交接-20261028.md
 > 来源：validation-20261028/F5（T4 实机：未签发授权、无 `firmware_roots`，v2 `local_full` 未返 403 即烧成）
 
 ### 查 2 · 串口桥 status + verify
@@ -44,7 +44,7 @@ curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
 - **过线按目标口判**：目标口 `workbench_ready=true` 且（`checks.open_ok=true` **或** `checks.in_use=true`）。`ok` 只是全局汇总，**别的口离线不阻塞本口**；**`ok=false` 只在目标口自身 `ports[].errors` 非空时才算阻塞**，再按 errors 报层级（WSL 桥 / Windows 双通道 / 软链 / 映射 `parity` 必须 N）。
 - 口被已有会话占住时是 `checks.open_ok=null` + `in_use=true`（`ok` 仍可为 `true`）：`in_use=true` 只说明该口此刻无法自证可打开，**不阻塞烧录**。标签与物理口可能对不上，**别硬编码 COM 号**，一律用 `mapping_id`。
 
-> 来源：references/serial-bridge.md:7-20,40-52；references/module-serial.md:3-6；交接-20261028.md:25
+> 来源：ai-control-plane/references/serial-bridge.md；ai-control-plane/references/module-serial.md；交接-20261028.md
 > 来源：validation-20261028/F1（T4 实机：`sta-main` 被占 → `ok=true`+`workbench_ready=true`+`in_use=true`+`open_ok=null`）
 
 ### 查 3 · 只认 `iap_*.bin`
@@ -56,7 +56,7 @@ curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
 
 不确定先读 `firmware/readme.txt`（文件1=生产 flash / 文件2=iap 串口升级 / 文件3=upgrade）。
 
-> 来源：references/module-serial.md:51-57；references/_归档-门面v2.9.md:144-145；交接-20261028.md:83-84
+> 来源：ai-control-plane/references/module-serial.md；交接-20261028.md
 
 ## 2. 提交烧录
 
@@ -76,7 +76,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v2/flash-jobs -H "Content-Type: applic
 - **job_id 怎么拿**：就是响应体里的 `job_id`，建议 `-o` 落盘；**丢了不用再翻 json 文件**——`GET /api/ai/v2/jobs?kind=flash_job&limit=10` 直接列最近的烧录任务摘要（含派生 `job_id`），拿到 id 再 `GET /api/ai/v2/jobs/{job_id}`。
   - 兜底：`<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json`（不在 `data/` 下）。
 
-> 来源：references/api-contract.md:246-265；apps/workbench/ai_contracts.py:158-165,187-198；apps/workbench/ai_v2_api.py:299-322
+> 来源：ai-control-plane/references/api-contract.md；apps/workbench/ai_contracts.py；apps/workbench/ai_v2_api.py
 
 ## 3. 进 bootloader 的正确姿势（2026-10-28 08:40 实测）
 ```
@@ -106,7 +106,7 @@ print("BOOTLOADER OK" if ("You can input command" in text or "[image /]#" in tex
 ser.close()
 ```
 
-> 来源：交接-20261028.md:70-78；evidence/build/sta-console-probe-20261027.md:44-56；apps/module_log/xmodem_flash.py:195-251,379-420
+> 来源：交接-20261028.md；evidence/build/sta-console-probe-20261027.md；apps/module_log/xmodem_flash.py
 
 ## 4. 三个坑（必须醒目）
 ### ✅ 坑 1（已修 2026-10-28，纪律仍守）· 重提 flash job 曾会二次烧录
@@ -131,7 +131,7 @@ module_serial_service.py:389  if self._flash_state["flashing"]: raise   ← 只�
 - `POST /jobs/{id}/cancel` 对 flash 显式拒绝：「烧录或模拟集中器验证任务不可取消」（`ai_capability_service.py:373`）；烧录中再提交撞 flashing 互斥：「烧录已在执行中」（`module_serial_service.py:390`）→ 409，不是故障。
 - 唯一正确姿势：**等**——`GET /jobs/{job_id}?wait_seconds=30` + 会话日志事件，直到终态。
 
-> 来源：REQS.md:105,109-122；apps/workbench/ai_capability_service.py:341-373；apps/module_log/module_serial_service.py:389-390；evidence/run/flash-cco-20261027-2144/README.md:24-28；evidence/run/flash-sta-20261028/README.md:22-27
+> 来源：REQS.md；apps/workbench/ai_capability_service.py；apps/module_log/module_serial_service.py；evidence/run/flash-cco-20261027-2144/README.md；evidence/run/flash-sta-20261028/README.md
 
 ## 5. 判定表（BURN SUCCESS 怎么认）
 | # | 判据 | 合格值（实测样例） |
@@ -145,7 +145,7 @@ module_serial_service.py:389  if self._flash_state["flashing"]: raise   ← 只�
 - **横幅从哪来**：`no_reboot_after=false`（默认）时**烧完自动重启**，六行横幅就在**会话日志的 `[RX]` 行**里（实测 11:43:58 烧完、11:44:00 出横幅），**不需要再手工 reboot 一次**；`03H-F1` 只读到 **CCO** 版本，**读不到 STA**（协议级 STA 版本回读另案）。`job_state=succeeded` 只代表跑完：**烧成没成看判据 1~3，烧的是不是这个件看判据 4~5 的那 4 项**，两边都要过。
 - **失败了先看哪里**：`job_state=failed`（或 `error`）时 L1/L2 可能**全是 `items:[]`**、只有 `summary:"flash_job error"`；真因在该 op 的 `error` 字段里，文件是 **`<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json`**（**不在** `<WORKBENCH_ROOT>/data/...` 下），op id 取信封的 `underlying_refs` / `result.underlying_operation_id`。**证据全空不等于"没原因"**，不要据此断定无法归因。
 
-> 来源：evidence/run/flash-cco-20261027-2144/README.md:7-16；evidence/run/flash-sta-20261028/README.md:5,17,29-43,51-53；apps/module_log/module_serial_service.py:424
+> 来源：evidence/run/flash-cco-20261027-2144/README.md；evidence/run/flash-sta-20261028/README.md；apps/module_log/module_serial_service.py
 > 来源：validation-20261028/F4（failed job 证据 `items:[]`）、F7（T4 `banner_block.txt` 六行横幅；`date261027`/`FC_F8` 无对应字段）
 ## 6. 证据清单（缺了就写清为什么缺）
 | # | 要落的 | 怎么落 |
@@ -157,8 +157,8 @@ module_serial_service.py:389  if self._flash_state["flashing"]: raise   ← 只�
 
 **红线**：不重提 flash job；烧录中途不断电、不抢串口；不用 `flash_*.bin` 顶 `iap_*.bin`；烧完 stop 释放串口。
 
-> 来源：evidence/run/flash-sta-20261028/README.md:13-27；evidence/run/flash-cco-20261027-2144/README.md:3-16；交接-20261028.md:29-36,67
+> 来源：evidence/run/flash-sta-20261028/README.md；evidence/run/flash-cco-20261027-2144/README.md；交接-20261028.md
 ## 附录 · 深水事实库（答不清才翻，别整份读）
 
-- `references/operation-guide.md`（519 行）§5 烧录固件原始步骤；`references/api-contract.md`（490 行）§6 flash-jobs 字段级契约；`references/module-serial.md`（68 行）会话与烧录接口；`references/_归档-门面v2.9.md`（257 行，**仅当新文档查不到时**）。
+- `ai-control-plane/references/operation-guide.md`（519 行）§5 烧录固件原始步骤；`ai-control-plane/references/api-contract.md`（490 行）§6 flash-jobs 字段级契约；`ai-control-plane/references/module-serial.md`（68 行）会话与烧录接口；`ai-control-plane/references/_归档-门面v2.9.md`（257 行，**仅当新文档查不到时**）。
 - 铁律：事实库改动只改一处；子技能**不复制**事实库内容，避免两份说法打架。
