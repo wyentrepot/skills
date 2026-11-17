@@ -6,3 +6,7 @@
 
 # Reasonix Desktop 运行时自动生成的 meta（非技能，勿提交）
 .reasonix/
+
+# Python 字节码（技能自带脚本运行时生成）
+__pycache__/
+*.pyc

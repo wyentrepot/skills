@@ -14,6 +14,7 @@ skills/
 │   └── knowledge-base/                   # 知识库查阅（渐进式加载：索引→关键词/同义词→定位+片段→经验沉淀）
 ├── codex/           # 仅 Codex 使用的专属技能
 ├── kilo/            # 仅 Kilo (WSL) 使用的技能，嵌入式开发相关
+├── deprecated/      # 已停用技能（仅追溯，不加载；见 deprecated/README.md）
 ├── reasonix/        # 仅 Reasonix (Windows) 使用的技能
 ├── dsh/             # 仅 DeepSeek Harness (DSH) 使用的技能（superpowers-dsh 移植包）
 ├── ds_bot/          # Bot 团队的设计与变更策略（ds-bot 插件，跨环境）
@@ -84,7 +85,6 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `cco-coding-standards` | CCO/STA 嵌入式 C/C++ 编码规范（142 条规则） |
 | `cco-loghooks-scan` | CCO 固件日志打印扫描 → 结构化清单，供 loghooks 规则作数据源（只读采集不改码） |
 | `observe-workbench-logs` | ZZT_SELF 工作台日志/帧的硬件非侵入、有界 AI 取证 |
-| `splc-flash-loop` | 固件编译→烧录→验证闭环 |
 | `sta-version-diff` | 版本差异分析文档生成 |
 
 ### Reasonix 技能（`reasonix/`）
@@ -154,6 +154,15 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | 名称 | 说明 |
 |------|------|
 | `archify` | 生成可验证的架构、流程、时序、数据流和生命周期图。 |
+
+### 已停用技能（`deprecated/`）
+
+> 仅作历史追溯，**不进入任何 harness 的技能目录、不会被加载**。清单与恢复方式见 [`deprecated/README.md`](deprecated/README.md)。
+
+| 名称 | 原属环境 | 停用原因 |
+|------|----------|----------|
+| `splc-flash-loop` | Codex / Kilo | EDBG 闭环旧烧录链（WSL → PowerShell → Windows Python → COM），已被 `wb-flash` + 串口桥取代 |
+| `splc-sync-feature` | Codex | 上位机 Windows PyInstaller 打包与双仓特性同步，交付流程已停用 |
 
 
 ## 添加新技能

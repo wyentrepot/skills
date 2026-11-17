@@ -4,6 +4,8 @@ description: 构建、烧录并验证 SPLC STA/CCO V2 固件，使用现有 EDBG
 disable-model-invocation: true
 ---
 
+> **已停用（2026-11-17）**：本技能已移入 `deprecated/`，不再进入任何 harness 的默认技能目录，也不会被自动加载。现行固件烧录走 `wb-flash`（工作台 8790 + 串口桥），本技能保留仅供追溯。详见 `deprecated/README.md`。
+
 # SPLC STA/CCO V2 实机闭环
 
 本文件是此技能的权威说明。`QUICKSTART.md` 和 `INSTALL.md` 是旧资料；若与本文件或当前 CLI 不一致，以本文件和当前运行时为准。

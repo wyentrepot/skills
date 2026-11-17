@@ -4,6 +4,8 @@ description: Synchronize one named feature across the SPLC STA firmware at /home
 disable-model-invocation: true
 ---
 
+> **已停用（2026-11-17）**：本技能已移入 `deprecated/`，不再进入任何 harness 的默认技能目录，也不会被自动加载，保留仅供追溯。详见 `deprecated/README.md`。
+
 # SPLC dual-project feature synchronization
 
 Read [references/binary-contract.md](references/binary-contract.md) before
