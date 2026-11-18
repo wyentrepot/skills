@@ -5,7 +5,7 @@
 ## 命令
 
 ```bash
-CTL="python3 $SKILL_DIR/scripts/fcctl.py"   # $SKILL_DIR = 加载技能时给的技能目录（SKILL.md §1）
+CTL="python3 $BASE/scripts/fcctl.py"   # $BASE = hs-dw31-base 技能目录（先读 hs-dw31-base 拿到）
 $CTL send --cmd 0x3013 --wait 2
 $CTL send --cmd 0x3410 --param-hex 00000000 --wait 2
 $CTL send --cmd 0x5503 --param-hex 01040000 --wait 2

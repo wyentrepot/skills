@@ -11,7 +11,7 @@
 ## 1. 前置
 
 ```bash
-CTL="python3 $SKILL_DIR/scripts/fcctl.py"   # $SKILL_DIR = 加载技能时给的技能目录（SKILL.md §1）
+CTL="python3 $BASE/scripts/fcctl.py"   # $BASE = hs-dw31-base 技能目录（先读 hs-dw31-base 拿到）
 $CTL doctor
 ```
 
