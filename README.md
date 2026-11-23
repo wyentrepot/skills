@@ -6,6 +6,7 @@
 
 ```
 skills/
+├── fc/              # 公司办公 FC 环境技能（海思 DW31 上位机、固件打包、Parasoft）
 ├── shared/          # 所有环境共用的技能，按能力域分组
 │   ├── development-process/              # 需求、设计与实施计划
 │   ├── code-quality/                     # 测试与编码规范
@@ -24,6 +25,8 @@ skills/
 │   └── install-dsh.sh         # 将 dsh/ + shared/ 技能复制到 $DSH_HOME/skills（DSH 用户技能根）
 └── README.md
 ```
+
+> **端口户口（2026-11-18 核对）**：module_log 独立版（曾用 8766）已并入工作台 `/module-serial`；**8766 现为 Windows 宿主控制面（wsl-control v2.0.0）端口**——勿把旧 module_log 独立版拉起来占用它（会抢掉 Windows localhost:8766 的转发）。
 
 **每个技能都是自包含的独立文件夹**。凡是某个技能依赖的脚本，一律放进该技能自己的文件夹内，不散落在仓库根部：
 
@@ -76,6 +79,18 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 
 > DSH 技能发现根：用户 `<DSH_HOME>/skills`、项目 `<项目根>/.dsh/skills`。若不用脚本，也可手动把 `dsh/*` 与 `shared/*` 复制到 `<DSH_HOME>/skills/`。注意：公司 DLP 环境下请用 WSL 或 DSH 自身进程写入，避免把 git checkout 到 NTFS 后被 E-SafeNet 透明加密，导致 DSH 无法读取。
 
+> ⚠️ **DLP 加密会让 `git status` 误报"已修改"（2026-11-23 实测确认）**
+>
+> E-SafeNet 的加密发生在写入之后，所以 NTFS 上 clone 的仓库会出现这种怪象：`git status` 报若干文件被改动，但 `git diff --numstat` 显示 `-  -`（二进制）、`git diff --stat` 显示 `Bin 21684 -> 21684 bytes`——**字节数一模一样**。原因是 `git show HEAD:<file>` 取到的 blob 是干净明文，而工作区文件已被套上 `E-SafeNet...LOCK` 文件头，两者自然不等。
+>
+> 判别方法（看文件头即可，无需解密）：
+>
+> ```bash
+> head -c 200 <file> | grep -a E-SafeNet   # 有输出 = 已被 DLP 加密
+> ```
+>
+> **绝对禁止**在 Windows 侧对这个 clone 执行 `git commit -a` / `git add .`——那会把密文提交进仓库，把明文版本永久覆盖掉。正确做法：在 WSL（ext4 不受 DLP 影响）里操作，或用 `git checkout -- .` 丢弃这些假改动。
+
 ## 技能列表
 
 ### Kilo 技能（`kilo/`）
@@ -125,6 +140,17 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 | `using-git-worktrees` | 需要隔离工作空间时 |
 | `writing-skills` | 编写/测试 DSH skill |
 
+### 公司办公 FC 技能（`fc/`）
+
+> 仅公司办公环境使用；不随 `install-dsh.sh` 安装（该脚本只装 `dsh/` + `shared/`）。
+
+| 名称 | 说明 |
+|------|------|
+| `hs-dw31` | 海思 DW31 / 海思 PLC CCO/STA 工程调试上位机（Windows FC 服务 8765）：抓日志/帧/prim 取证、编译出升级包、在线升级与烧录判定、NV/拓扑/原始诊断命令、工程分析。触发按「工程 + 任务」判定，工程根运行时解析，契约内联在 `references/contract.md`。 |
+| `firmware-version-build` | CCO/ECU/STA 固件版本编译、打包和归档（逐层加载：cco / sta / 单元测试）。 |
+| `parasoft-static-analysis` | Parasoft C/C++test 扫描、按 Git 新增行或报告基线筛选、严重等级汇总。 |
+| `cco-sdk-boot-swap` | CCO/STA 换厂家 SDK 版本与 bootloader、双代 SDK 兼容编译（`make cco_v3` / `make cco` / `make ecu`）、换 SDK 后上板验证与"编译全绿但上板卡死"类排障。 |
+
 ### 共享技能（shared/）
 
 #### 研发流程（`shared/development-process/`）
@@ -141,19 +167,30 @@ bash C:/path/to/skills/scripts/install-reasonix.sh
 |------|------|
 | `test-driven-development` | 行为变更先做失败前置检查，再最小实现和回归验证。 |
 | `coding-standards` | 嵌入式 C 代码的最小改动、资源清理和可移植性规范。 |
+| `clang-format` | `.clang-format` 规则的编写、应用与排障：格式化差异最小化、编辑器/hook/CI 集成（含 7 套预设配置与 10 篇规则详解）。 |
 
 #### 实机闭环（`shared/hardware-in-the-loop/`）
 
 | 名称 | 说明 |
 |------|------|
 | `ai-control-plane` | 通过 HTTP 驱动真机 HPLC 工作台（v2 任务门面默认，v1 专家兼容），覆盖串口、烧录、日志和证据。内容源：工作台仓库 `.agents/skills/ai-control-plane`（v2.4.0，自包含参考 + 校验脚本）。 |
-| `firmware-version-build` | CCO/ECU/STA 固件版本编译、打包和归档（逐层加载：cco / sta / 单元测试）。 |
+
+#### 知识库（`shared/knowledge-base/`）
+
+| 名称 | 说明 |
+|------|------|
+| `knowledge-lookup` | 查库答协议问题（国网/南网 645、698.45、10376、1376.2、双模、载波等；海思 DW31 原厂手册）。触发即查库，禁止凭训练记忆答协议/状态机/字段细节。 |
+| `knowledge-manage` | 写库：源文档解析→按功能拆卡→双层卡撰写→子代理分发→索引与 vault-map 同步→校验→git 提交。只管"写库"，查库用 `knowledge-lookup`。 |
 
 #### 研究与技术表达（`shared/research-and-technical-expression/`）
 
 | 名称 | 说明 |
 |------|------|
 | `archify` | 生成可验证的架构、流程、时序、数据流和生命周期图。 |
+| `chinese-documentation` | 中文文档排版参考：中英文空格、全半角标点、术语保留、链接格式（仅显式 `/chinese-documentation` 调用）。 |
+| `chinese-code-review` | 中文 review 沟通参考：话术模板、分级标注（必须修复/建议修改/仅供参考）、国内团队常见反模式（仅显式调用）。 |
+| `chinese-commit-conventions` | 中文 commit 与 changelog 配置：Conventional Commits 中文适配、commitlint/husky/commitizen 中文模板（仅显式调用）。 |
+| `embedded-function-spec` | CCO/STA 嵌入式功能说明文档（功能规格、业务模块说明）的撰写与评审范式。 |
 
 ### 已停用技能（`deprecated/`）
 
