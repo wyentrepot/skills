@@ -7,6 +7,9 @@
 # Reasonix Desktop 运行时自动生成的 meta（非技能，勿提交）
 .reasonix/
 
+# superpowers 头脑风暴服务运行态（端口/pid/日志，含会话 token，勿提交）
+.superpowers/
+
 # Python 字节码（技能自带脚本运行时生成）
 __pycache__/
 *.pyc
