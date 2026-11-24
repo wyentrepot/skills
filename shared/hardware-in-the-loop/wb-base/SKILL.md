@@ -4,9 +4,9 @@ description: 共享基座子技能：工作台在线任务的接入与授权（�
 argument-hint: "[任务，如 拿 token / 看 capabilities / 读 job 证据 / 查错误码]"
 metadata:
   author: reasonix
-  version: "1.0.0"
+  version: "1.1.0"
   applies-to: 任意工作区（<WORKBENCH_ROOT> 按序单点解析见 §1.1）
-  source: 拆自 ai-control-plane（2026-10-28）
+  source: 拆自 ai-control-plane（2026-10-28）；2026-11-18 拆薄：低频内容下沉 references/（v2 契约补充/scope 全表+v1 面/挂载语义/语义查询/观察语义全文/编排与页面/G 缺口），正文只留每次必用+红线+错误码
 ---
 
 # wb-base · 接入·授权·证据·错误码
@@ -25,9 +25,10 @@ metadata:
 | 要一份 token、要最小 scope、要撤销授权 | 本技能 §2 |
 | 先看后端有哪些能力/源是否健康再选路 | 本技能 §3.1 |
 | 提交任务、等 job、按需取 L1/L2/L3 证据 | 本技能 §3.3—§3.5、§4 |
-| 旧客户端/专家诊断要细粒度端点 | 本技能 §3.7 |
+| 建观察任务要 match 矩阵/完整示例 | references/observations.md |
+| 旧客户端/专家诊断要细粒度端点 | references/scopes.md |
 | 判"这条结论算不算证据""为什么是 inconclusive" | 本技能 §4 |
-| 只想跑一次全链路验证拿报告（无 token） | 本技能 §5.1 |
+| 只想跑一次全链路验证拿报告（无 token）/ 排查前端调用 | references/orchestration.md |
 | 401/403/404/409/422/503 怎么处置 | 本技能 §7 |
 | 烧录固件并判定是否真烧成 | `wb-flash` |
 | 侦听台建索引、查已解析帧、通信流追踪、组网诊断 | `wb-listener` |
@@ -39,13 +40,11 @@ metadata:
 
 ## §1 接入
 
-### 前言：部署形态与前缀映射（最容易踩的一层）
+### 前言：部署形态与前缀映射（一句话版）
 
-- **入口**：统一工作台 `apps/workbench/run.py` → **8790**，`/api/*` 各命名空间，页面 `/static/pages/<页名>/`、外壳 `/`；侦听台独立版 `apps/listener/run.py` → 8765，`/api/*`（无业务段）；模块日志独立版 `apps/module_log/run.py` → 8766，`/api/module-serial/*`；simcon 独立版 `python -m sim_concentrator.api` → 8781，`/api/simcon/*`。
-- **挂载代理语义**：**外部路径 = `{api_prefix}{rest}` → 子应用收到 `{sub_root}{rest}`**。`/api/listener/*` 由 listener 接、**剥业务段**（`/api/listener/logs/status` → 子应用 `/api/logs/status`）；`/api/module-serial/*`、`/api/fs/*`、`/api/loghooks/*` 由 module_log 接、同前缀透传；`/api/simcon/*` 是 simcon **平级顶层 mount**（REQS-0023，不经 module_log，无剥前缀）；`/api/ai/v1/*` 与其余 `/api/*` 由 workbench 自身接（AI 控制面 / 编排·字典·串口 Profile）；`/static/*`、`/` 走静态外壳（NoCacheHTMLStaticFiles）。
-- **双前缀特例（勿"修正"）**：listener 子应用自身有 `/api/listener/*` 路由（traces、indexes），叠加挂载前缀后外部路径是 **`/api/listener/listener/traces`**（trace.js 就这么调）。indexes 同时暴露为 `/api/indexes` 与 `/api/listener/indexes`，故外部两种写法都有效。
-- **挂载降级**：listener 依赖 C# DLL/pythonnet，挂载失败自动降级（`GET /api/platform-version` 里 `listener_mounted=false`，页签显示"不可用"），不拖垮整体。
-- **平台端点**：`GET /`（外壳）、`GET /api/platform-version`（`{app, version, module_log_mounted, listener_mounted}`）、`GET /api/health`（`{status:"ok", app:"workbench"}`，免鉴权探活）、`POST /api/shutdown`（uvicorn graceful 停机，进程退出）。
+- **入口**：统一工作台 `apps/workbench/run.py` → **8790**（`/api/*` 各命名空间、页面 `/static/pages/<页名>/`）；独立版：侦听台 8765、simcon 8781。**module_log 独立版已并入工作台 `/module-serial`；8766 现为 Windows 宿主控制面（§1.4），勿再拉起占用。**
+- **双前缀特例（勿"修正"）**：外部路径 `/api/listener/listener/traces` 是正确的，不是 bug。
+- 挂载代理语义、剥前缀规则、挂载降级 → `references/deployment.md`（排查挂载/改接口时才读）。
 
 > 来源：ai-control-plane/references/api-contract.md
 
@@ -67,30 +66,65 @@ python tools/scripts/verify_api_inventory.py [--json] [--repo-root <WORKBENCH_RO
 
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/features.md
 
-### §1.2 启动与配置
+### §1.2 启动与配置（2026-11-18 起：systemd 常驻为主路径）
+
+**主路径（WSL systemd 常驻，已实测）**：单元文件 `/etc/systemd/system/zzt-workbench.service`（`Restart=always`，环境变量已带 `WORKBENCH_LOCAL_FULL_ACCESS=1`、`HPLC_OPEN_WORKBENCH=0`），开机随 WSL 自启、崩溃/SIGTERM 自动拉起。
+
+- **停止只能 `systemctl stop zzt-workbench`**；直接 kill 会被秒拉起。
+- **禁止手工 `python -m workbench.run` / `run.py` 起第二份**（端口冲突导致 restart 循环）；启动权归 systemd。
+- 冷启动约 11 秒，stop/start 后等一会儿再探活；日志 `journalctl -u zzt-workbench`。
 
 ```bash
-# 任意 cwd 可启动（run.py 自动把仓库根/apps/libs 注入 sys.path，不依赖 cd/PYTHONPATH）
-python3 <WORKBENCH_ROOT>/apps/workbench/run.py
+systemctl status|stop|start zzt-workbench   # 唯一控制入口
+journalctl -u zzt-workbench -n 50           # 日志
+curl -s http://127.0.0.1:8790/api/health    # 探活
+```
 
-# 桌面 / WSL 人机环境可后台常驻（沙箱禁用，见下）
+**备选（无 systemd 的环境才用）**：手工启动要带 `WORKBENCH_LOCAL_FULL_ACCESS=1`（漏掉则 v2 `capabilities` 直接 401「缺少 Bearer token」，AI 会误以为要找人要 token 而绕路）：
+
+```bash
 WORKBENCH_LOCAL_FULL_ACCESS=1 HPLC_OPEN_WORKBENCH=0 \
   nohup python3 <WORKBENCH_ROOT>/apps/workbench/run.py > /tmp/wb.log 2>&1 &
 ```
 
-- **`WORKBENCH_LOCAL_FULL_ACCESS=1` 必须带**：漏掉则 `GET /api/ai/v2/capabilities` 直接 401「缺少 Bearer token」，AI 会误以为要找人要 token 而绕路。`HPLC_OPEN_WORKBENCH=0` 供 headless/无图形环境关掉自动开浏览器。
-- **后台常驻按环境二选一**：agent 沙箱/容器（子进程随外层 shell 结束被回收）**必须用受管后台任务**，日志从该任务输出读，**不要用 nohup**；桌面/WSL 才可用 nohup。
-- **停止**：禁用 `pkill -f "workbench.run"`（会命中执行该命令的 shell 自身导致自杀）。先 `pgrep -af "[w]orkbench.run"` 取 PID 再 kill，或直接终止受管后台任务。
-- **人工授权密钥**（仅"AI 自动拿授权"需要）：启动前设 `WORKBENCH_AI_ADMIN_KEY`，或用 `tools/scripts/一键生成AI密钥.bat` 一键装好；未配置时 admin 授权接口返回 `503 未配置人工授权管理密钥`。日常人工点页面不需要它。
+- agent 沙箱/容器（子进程随外层 shell 结束被回收）必须用受管后台任务，日志从该任务输出读；桌面/WSL 人机环境才可用 nohup。
+- 停止禁用 `pkill -f "workbench.run"`（会命中执行该命令的 shell 自身导致自杀）；先 `pgrep -af "[w]orkbench.run"` 取 PID 再 kill（有 systemd 时一律 systemctl）。
+- **授权管理密钥**（AI 自签 grant 时需要）：启动前设 `WORKBENCH_AI_ADMIN_KEY`（systemd 单元已含）；未配置时 admin 授权接口返回 `503 未配置人工授权管理密钥`。页面操作不需要它。
 - **一键启动包**用 `git archive HEAD` 打包：**未提交的改动不生效**（改页面/后端先提交再打包）。
 
-> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
+### §1.4 Windows 宿主控制面（8766，串口/网关/诊断的唯一开关口）
+
+> **维护口径（2026-11-18）**：WSL 侧 `wsl-control.py` **v2.0.0 为唯一权威**（`/api/v1/*`、audit、workbench 探活，响应包一层 `data`）；Windows 侧旧文档 `WSL-CONTROL-API.md`（v1）已过时，仅存档。要 Windows 侧手动开关工作台，在 v2 里加路由即可（systemd 已兜底，非必须）。
+
+Windows 侧三件事（串口桥、解析网关 8700、海思诊断服务 8765）由常驻服务 `wsl-control` 统一管；
+**技能不要再手动 `wsl stop`、不要自己找 COM、不要直接杀进程**，一律走它。
+
+```bash
+HOST=$(ip route show default | awk '{print $3}')
+TOKEN=$(cat /mnt/c/Users/*/.wsl-control/token 2>/dev/null | tr -d '\r\n')   # 令牌文件也可能在 C:\Users\Public 下
+
+curl -s -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/status          # 看板数据（缓存 8s）
+curl -s -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports           # 逐口：COM/归属/通道
+curl -s -X POST -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/services/bridge/{start|stop|restart}
+curl -s -X POST -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports/<id>/{enable|disable}
+curl -s -X POST -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/doctor  # 出问题先跑它
+```
+
+- **令牌**：非回环必须带；回环（Windows 本机）免。令牌文件 `%USERPROFILE%\.wsl-control\token`。
+- **归属**：`ports[].owner` = `serial-bridge` / `fc-diag` / `free` / `absent` / `disabled`；`conflict=true` 表示桥与诊断服务抢同一 COM。
+- **让口**给 Windows 工具：`services/bridge/stop`（全部）或 `ports/<id>/disable`（单个，会重启 Windows 桥 5–15s）。
+- **看板**：`http://127.0.0.1:8766/`（Windows 本机）；从 WSL 打开需粘贴令牌。
+- **usbipd 已移除**（2026-11-17）：`/api/usbipd/*` 返回 410，不要再提 attach/detach。
+
+> 来源：/01-workfile-ai/01-zzt/ZZT_SELF/tools/win_host/WSL-CONTROL-API.md、README.md
 
 ## §2 授权：grant / scope / resource / token
 
-### §2.1 边界与签发（人执行）
+### §2.1 边界与签发（对话授权后可自执行）
 
-授权**只由人签发**：仅限 workbench 本机 `127.0.0.1` + `X-Workbench-Admin-Key` 请求头；AI 只使用人已签发的 token，**不自签、不扩权、不转交**。前置是工作台已在 8790 运行（`curl http://127.0.0.1:8790/api/health` → 200）且已配置 admin key。
+**授权在对话，签发可自执行**：用户明确说"允许 / 可以烧 / 直接升"即为授权；拿到授权后 AI 可自行签发**最小权限 grant**（仅本次任务 scope + 必要 `firmware_roots` + 短 TTL，建议 ≤3600s），或复用已有 token，然后直接提交烧录/升级。仍禁止：无授权就签 grant、扩大 scope（能窄就不给 `resources:["*"]`）、把 token 写进日志/提交、转交他人、靠重启工作台塞 env 白名单绕过（审计会记 `authorization_source`）。
+
+签发仅限 workbench 本机 `127.0.0.1` + `X-Workbench-Admin-Key` 请求头；前置是工作台已在 8790 运行（`curl http://127.0.0.1:8790/api/health` → 200）且已配置 admin key。
 
 ```bash
 curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
@@ -102,43 +136,49 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 
 - **scope 最小化**：只申请本次任务需要的（§2.2），上面的例子就是"只监控日志"的最小集。`resources` 取 `*` 或具体 `mapping_id`/`session_id`；`ttl_seconds` 1–86400；`max_operation_seconds` 可选（默认 1800）。
 - **要烧录必须给 `firmware_roots`**（允许的固件目录白名单数组），否则（v1 / 局域网面）flash 返回 **403「当前授权未配置允许烧录目录」**。
-- **白名单两来源（2026-10-28 `d5719b7` 起 v1/v2 统一）**：`grant.firmware_roots` 优先 → 回退环境变量 `WORKBENCH_AI_FIRMWARE_ROOTS` → 都空则 403。`local_full`（本机 loopback 免 token）下没有 grant，白名单由 env 顶上；**没配 env 就 403**。放行时写 `store.audit(action="flash.authorization")`，记 `authorization_source`（grant/env/local_full_env）+ `bin_path` + 命中的 root。**团队红线：烧录必须由人授权**，不得靠 env 给自己开白名单。
+- **白名单两来源（2026-10-28 `d5719b7` 起 v1/v2 统一）**：`grant.firmware_roots` 优先 → 回退环境变量 `WORKBENCH_AI_FIRMWARE_ROOTS` → 都空则 403。`local_full`（本机 loopback 免 token）下没有 grant，白名单由 env 顶上；**没配 env 就 403**。放行时写 `store.audit(action="flash.authorization")`，记 `authorization_source`（grant/env/local_full_env）+ `bin_path` + 命中的 root。**团队红线：烧录必须先有用户明确授权**；授权后 AI 可自签带 `firmware_roots` 的 grant，但不得靠重启工作台塞 env 给自己开白名单（那条路没有 `flash.authorization` 审计）。
 - `token` **只返回一次**（服务端只存 SHA-256 摘要）——务必当场保存，AI 全程只用 token。`503` = admin key 未配置/没重启；`403` = key 错或非本机发起。
 
 > 来源：ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F5（T4 实机：v2 `local_full` 零授权、无 `firmware_roots` 也烧成 STA）
 
-### §2.2 scope → 能力映射（14 种）
+### §2.2 scope 名单速览（14 种）与 resource 约定
 
-| scope | 能力 | 所需资源 / 典型任务 |
-| --- | --- | --- |
-| `status:read` | `/status`、`/audit` | `*` 或资源；探状态、看审计流水 |
-| `module_session:ensure` / `:stop` | 确保/创建、停止模块串口会话 | mapping_id / 会话 |
-| `module_send:execute` | 向模块会话发送指令 | 会话 |
-| `module_flash:execute` | 烧录固件 | 会话（另需 `firmware_roots`） |
-| `listener:ensure` / `listener:stop` | 侦听台采集开 / 停 | mapping_id；停止时在线用当前 mapping_id、离线回退 `listener-main` |
-| `listener:trace` | 创建通信流追踪（回放/live） | 当前侦听台 mapping_id / `listener-main` |
-| `observation:create` | 建观察任务、取消操作 | mapping_id / 会话；监控日志、盯帧 |
-| `evidence:read` | 读 operation / Artifact / 帧索引/追踪 | 对应资源；取证、查帧（监控行也必需） |
-| `simcon:verify` / `simcon:send` / `simcon:read` | 验证任务 / 单步·开关串口 / 帧日志与持久层读 | `simcon` |
-| `simeter:read` | 模拟电表状态/帧日志只读（v2 `simeter_frames.read`） | 模拟电表观察；写操作免 token 直连 `/api/simeter/*` |
+- **速览**：`status:read`；`module_session:ensure`/`:stop`、`module_send:execute`、`module_flash:execute`（另需 `firmware_roots`）；`listener:ensure`/`:stop`、`listener:trace`；`observation:create`、`evidence:read`；`simcon:verify`/`:send`/`:read`；`simeter:read`。**scope→能力→所需资源全表 → `references/scopes.md`**。
+- **资源（resource）**：串口类用 `serial_ports.json` 的 `mapping_id`：`cco-main`、`sta-main`、`listener`（实际 COM 号随接线变化，**调用方优先用 mapping_id，不硬编码 COM 号**）；simcon 口的 task **必须显式 `mapping_id:"simcon"`**（不传会自选 `/dev/ttyS0` 报 `Input/output error`，见 `wb-simcon` §1；该口实测 115200，baud 以 status 的 `mapping.baudrate` 为准）；会话资源用 `session_id`（`ms-xxxx`），AI 接口内部归一到其 `mapping_id`。`resources:["*"]` 全放行（谨慎）；越权 403，token 无效/过期/撤销 401。
 
-**资源（resource）**：串口类用 `serial_ports.json` 的 `mapping_id`：`cco-main`、`sta-main`、`listener`（实际 COM 号随接线变化，**调用方优先用 mapping_id，不硬编码 COM 号**）；simcon 口的 task **必须显式 `mapping_id:"simcon"`**（不传会自选 `/dev/ttyS0` 报 `Input/output error`，见 `wb-simcon` §1；该口实测 115200，baud 以 status 的 `mapping.baudrate` 为准）；会话资源用 `session_id`（`ms-xxxx`），AI 接口内部归一到其 `mapping_id`。`resources:["*"]` 全放行（谨慎）；越权 403，token 无效/过期/撤销 401。
-
-> 来源：ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/simeter.md；ai-control-plane/references/auth.md
+> 来源：ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/simeter.md
 
 ### §2.3 token 用法与两条访问通道
 
 - 请求头固定 `Authorization: Bearer <token>`；**不要把 token 写进输出、日志、提交内容或证据正文**。
 - **v2（默认低 token 面）**：仅在**真实对端为 loopback**（`127.0.0.1`/`::1`）且显式设置 `WORKBENCH_LOCAL_FULL_ACCESS=1` 时进入 `local_full`、免 token，但仍写审计；局域网请求必须 Bearer grant，并按 capability、scope、逻辑资源 alias 过滤。
 - **v1（专家兼容面）**：所有业务接口都要 Bearer token——**即使 `local_full` 也一样**（如 `GET /api/ai/v1/listener/indexes`）。admin grant 签发/撤销永远要本机 + admin key。
-- **管理辅助**：`GET /api/ai/v1/admin/grants`（列，admin key）、`POST /api/ai/v1/admin/grants/{grant_id}/revoke`（撤销，404）、`GET /api/ai/v1/audit`（审计流水，token + `status:read`，按授权 resources 过滤）。
+- **管理辅助**：`GET /api/ai/v1/admin/grants`（列，admin key）、`POST /api/ai/v1/admin/grants/{grant_id}/revoke`（撤销，404）、`GET /api/ai/v1/audit`（审计流水，token + `status:read`，按授权 resources 过滤）。**audit 翻页口径（2026-11-18 实测）**：响应键是 `entries`（不是 `events`/`items`）；小 `limit`（10/20）按时间正序翻出来的可能是几个月前的旧账，**要覆盖近期必须给大 `limit`（实测 500 才够今天）**，且 v1 即使 `local_full` 也要 Bearer。
 
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/auth.md；ai-control-plane/references/operation-guide.md
 
 ## §3 任务门面 v2（默认 AI 调用面）
 
 v2 把"查状态、并行观察、模块动作、验证、烧录、取证"收敛为任务级工作流：AI 客户端默认只需要**发现能力、提交一个任务、读取 job、按需取证**四类调用。v1 路由保留给专家诊断和兼容场景，**不因 v2 上线而删除或改名**。
+
+### §3.0 执行层 CLI（首选执行方式）
+
+本技能自带 `scripts/wb.py`（Python 3 标准库，无依赖）：把 §1/§2/§3 的高频判据固化成命令，**AI 首选跑它；下文 curl 序列降级为契约参考与脚本不可用时的兜底**。
+
+| 命令 | 固化的判据（不再靠 AI 记） |
+| --- | --- |
+| `wb status` | 8766 owner/conflict + 8790 探活 + 桥 `all_enabled_ready`/`config_stale` 一屏 |
+| `wb preflight <mapping_id>` | 只验目标口；`usable` 过线；`in_use=true` 不阻塞；全局 `ok` 不作数 |
+| `wb auth --scopes … --firmware-root …` | 最小 scope + 烧录白名单 + token 只显示一次（--json 也遮蔽） |
+| `wb session ensure <cco\|sta> --mapping …` | 显式 mapping_id（红线：不自动选口）；409=占用，提示不硬抢 |
+| `wb flash submit <iap_*.bin>` | 只认 iap 件；幂等键默认 md5 派生（同件重提复用同 job，防二次烧录，§6.2 红线 6 由入口保证）；403 按"授权来源"解释，不引导重启塞 env |
+| `wb wait <job_id>` | 轮询 ≤30s 到终态；**失败自动归因**（①steps.reason → ②sent_hex 空=没发出去 → ③L1 → ④operations.json，即 §3.4 口径） |
+| `wb evidence <job_id> --level L1` | 三级证据读取 |
+
+- 环境变量：`WORKBENCH_BASE`（默认 8790）、`WORKBENCH_AI_ADMIN_KEY`、`WORKBENCH_AI_TOKEN`、`WORKBENCH_ROOT`（解析序同 §1.1）。
+- 退出码：0 成功；1 判定不过/任务失败；2 用法错误；3 连不上/缺配置（提示指向对应节）。
+- 冒烟测试：`python3 scripts/test_wb.py`（内置模拟工作台，18 例覆盖 preflight usable 判定/会话 409/幂等键/失败归因/token 遮蔽/`flash run` 全链）。
 
 ### §3.1 让工作台报一次能力清单与源健康
 
@@ -162,22 +202,9 @@ curl -s http://127.0.0.1:8790/api/ai/v2/capabilities | python3 -m json.tool
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F8（能力 11 项，`id=null`、`summary=""`）
 
-### §3.2 八条公开路径
+### §3.2 verification-runs 的 body 形状（可直接复制）
 
-| 方法 | 路径 | capability | 说明 |
-| --- | --- | --- | --- |
-| GET | `/api/ai/v2/capabilities` | `capabilities.read` | 能力、后端健康、逻辑资源别名 |
-| POST | `/api/ai/v2/investigations` | `investigations.create` | 最多 **3 个** observation 并行编排模块日志、侦听台、simcon |
-| POST | `/api/ai/v2/verification-runs` | `verification_runs.create` | 复用既有 simcon 验证；**不是烧录成功的替代** |
-| POST | `/api/ai/v2/module-actions` | `module_actions.*` | 显式 `ensure`/`send`/`stop`，禁止任意 action 透传 |
-| POST | `/api/ai/v2/flash-jobs` | `flash_jobs.create` | 复用既有烧录控制；固件路径必须在授权 `firmware_roots` 内 |
-| GET | `/api/ai/v2/jobs/{job_id}` | `jobs.read` | `wait_seconds=0..30`，GET 无副作用 |
-| POST | `/api/ai/v2/jobs/{job_id}/cancel` | `jobs.cancel` | 观察可取消；**烧录/验证拒绝取消** |
-| GET | `/api/ai/v2/jobs/{job_id}/evidence` | `jobs.evidence.read` | `level=L1\|L2\|L3`；L1/L2 有界，L3 只返回稳定引用 |
-
-请求/响应都是命名 Pydantic schema；写任务携带 `client_request_id` 实现幂等（重复提交复用原 job）。
-
-**`verification-runs` 的 body 形状（可直接复制）**——v2 只认 `{"task": {…}}`，`task` 里装的是 v1 verify 的整个 body：
+v2 只认 `{"task": {…}}`，`task` 里装的是 v1 verify 的整个 body：
 
 ```json
 {"task": {"mapping_id": "simcon",
@@ -189,6 +216,7 @@ curl -s http://127.0.0.1:8790/api/ai/v2/capabilities | python3 -m json.tool
 
 - 把 v1 平铺字段写在上层（顶层 `id`/`profile`/`steps`）会 **422 `Extra inputs are not permitted: id/profile/steps`**——**v1 平铺写法的字段一个都不能带上来，连 `id` 也不行**。
 - `task.mapping_id` 必给（`simcon`/`cco-main`/`sta-main`）；不给会走自动选口、掉到 `/dev/ttyS0` 报 `Input/output error`（见 `wb-simcon` §1）。
+- **八条公开路径全表**（端点 × capability 对照，含"观察可取消、烧录/验证拒绝取消"等语义）→ `references/v2-contract.md`。
 
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 > 来源：validation-20261028/F3（T3 实机：平铺 → 422；包 `task` → 202）
@@ -196,28 +224,11 @@ curl -s http://127.0.0.1:8790/api/ai/v2/capabilities | python3 -m json.tool
 ### §3.3 四步低 token 任务流
 
 1. `GET /capabilities` 发现后端与逻辑资源 alias（§3.1），**不读也不猜物理 COM 号**。
-2. 提交一个任务：观察 `POST /investigations`、模块控制 `POST /module-actions`、验证 `POST /verification-runs`（body 形状见 §3.2 的 `{"task":{…}}` 示例）、烧录 `POST /flash-jobs`。
+2. 提交一个任务：观察 `POST /investigations`、模块控制 `POST /module-actions`、验证 `POST /verification-runs`（body 形状见 §3.2）、烧录 `POST /flash-jobs`。
 3. `GET /jobs/{job_id}` 读统一状态（可 `wait_seconds` 阻塞）。
 4. 只有需要细节时才 `GET /jobs/{job_id}/evidence?level=L1|L2|L3`。
 
-```bash
-# 一次并行观察模块日志 + 侦听台历史索引（最多 3 个 observation）
-curl -X POST http://127.0.0.1:8790/api/ai/v2/investigations \
-  -H "Content-Type: application/json" \
-  -d '{
-    "context_id": "case-20260902-001",
-    "client_request_id": "case-20260902-001-observe",
-    "observations": [
-      {"source":"module_log", "target":{"session_id":"ms-xxxx"},
-       "window":{"mode":"live","timeout_seconds":120},
-       "match":{"kind":"literal","value":"发送成功"}},
-      {"source":"listener", "target":{"index_id":"idx-20260902"},
-       "window":{"mode":"cursor_range","type":"cursor_range","index_id":"idx-20260902","start_frame_id":1,"end_frame_id":500},
-       "match":{"kind":"literal","value":"上行"}}
-    ],
-    "cleanup":"owned_only"
-  }'
-```
+一次并行观察（最多 3 个 observation：模块日志 + 侦听台历史索引）的完整请求体示例 → `references/v2-contract.md`。
 
 - 返回 `202` + `job_id`。历史窗口完成后可立即读 job；live 窗口由服务端 worker 推进。
 - **`job_state` 是执行状态，`verdict` 只用于 investigation 观察**（`pass/fail/inconclusive/error`）；module_action / verification_run / flash_job 的 `verdict` 恒 `null`，模块动作/验证/烧录成功**不会**伪装成业务 `pass`。
@@ -225,20 +236,9 @@ curl -X POST http://127.0.0.1:8790/api/ai/v2/investigations \
 
 > 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 
-### §3.3b 找回最近的 job（2026-10-28 新增）
+### §3.3b 找回最近的 job
 
-job_id 丢了不用翻 json 文件：
-
-```bash
-curl -s "http://127.0.0.1:8790/api/ai/v2/jobs?kind=flash_job,verification_run&state=error&limit=10"
-# → {"jobs":[{operation_id,kind,actor,state,created_at,updated_at,client_request_id,error,job_id}],"count":N,"limit":10}
-```
-
-- `kind` 可重复（`?kind=flash_job&kind=verification_run`）或逗号分隔；`state` 精确匹配；`since` 为 ISO 时间（非法值 422）；`limit` 默认 20、**硬上限 100**。
-- 每条只含元数据（**不含 payload/result**），另带派生 `job_id`，可直接拿去 `GET /jobs/{job_id}` 或 `/evidence`。
-- 已知边界：列表**未按资源收敛**——LAN 侧只要有 `jobs.read` 就能看到全部摘要（单条 `read_job` 才逐条校验 resources）。
-
-> 来源：apps/workbench/ai_store.py list_operations、apps/workbench/ai_v2_api.py GET /jobs（2026-10-28 d5719b7 落地，实机验证通过）
+`job_id` 丢了不用翻 json 文件：`GET /api/ai/v2/jobs?kind=flash_job,verification_run&state=error&limit=10` 列最近任务摘要（含派生 `job_id`），拿到 id 再 `GET /jobs/{job_id}` 或 `/evidence`。参数细节（`kind`/`state`/`since`/`limit` 上限、"列表未按资源收敛"的边界）→ `references/v2-contract.md`。
 
 ### §3.4 提交与读取 job（实测口径）
 
@@ -287,41 +287,13 @@ curl -s "http://127.0.0.1:8790/api/ai/v2/jobs/<job_id>/evidence?level=L3&ref=lis
 
 ### §3.6 listener 语义查询（`trace_query` / `minute_periods`）
 
-listener observation 的 `match.kind` 除 `parsed_frame` / `frame_query` 外，还有两个**复用既有能力、不新建索引**的语义查询：`trace_query` 复用 `TraceService.run_replay`（并发抄表、单表、00A1、0020、0008 的多跳通信流）；`minute_periods` 复用 `list_task_minute_periods`（分钟采集，**禁止通过 raw HEX 猜测**）。
-
-```json
-{"source":"listener", "target":{"index_id":"idx-20260630-a"},
- "window":{"mode":"time_range","start":"00:00:00.000","end":"00:05:00.000"},
- "match":{"kind":"trace_query", "scope":"round",
-   "feature":{"app_id":"0003","msg_seq":"1EC2","frm_type":"终端主动并发抄表",
-              "dst_tei":"087","nid":"00947F69","channel":"载波",
-              "app_raw_contains":"123456789012","raw_hex_contains":"123456789012"},
-   "directions":["downlink","uplink","ack"]},
- "completion":{"match_count":1}}
-```
-
-- `feature`：`app_id` 必填；`scope` 为 `flow`/`round`/`campaign`；`directions` 只做 L2 展示与计数筛选，同一通信流默认保留必要 ACK 和对端帧。
-- `raw_hex_contains` 对整帧 `raw_hex` 验证、`app_raw_contains` 对已解析应用载荷验证；前者**仅作末端验证**，删空白后须为偶数长度 2–512 个十六进制字符，**无 `app_id`/NID/时间窗/帧 ID 窗口任一收窄条件时 422**。
-- `minute_periods`：`match` 给 `task_no`（必填）/`period_minutes`/`cco_tei`/`nid`，窗口仅 `time_range`；业务归属**以 `freeze_time` 为准**，L2 同时给 `log_time` 与 `freeze_time`，不得用上报时间替代。
+漏点/通信流追踪任务用：`match.kind` 还有 `trace_query`（复用 `TraceService.run_replay`，多跳通信流）与 `minute_periods`（复用 `list_task_minute_periods`，**禁止通过 raw HEX 猜测**）两个语义查询——复用既有能力、不新建索引。`feature` 字段表、收窄条件不足 422、业务归属以 `freeze_time` 为准等完整契约 → `references/semantic-queries.md`。
 
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
-### §3.7 v1 专家/兼容路径
+### §3.7 v1 专家/兼容路径（详情下沉）
 
-v1 语义：每接口校验 **scope + resource**；长任务返回 `operation_id` 轮询到终态；幂等同 v2；烧录强制 `firmware_roots` 白名单。
-
-| 能力 | 端点组（前缀 `/api/ai/v1`） | scope |
-| --- | --- | --- |
-| 全局状态 / 审计 | `GET /status`、`GET /audit` | `status:read` |
-| 模块会话 | `POST /module-sessions/ensure`、`{id}/stop`、`{id}/send` | `module_session:ensure` / `:stop` / `module_send:execute` |
-| 烧录 | `POST /flash-operations`（202） | `module_flash:execute` |
-| 侦听台控制 / 追踪 | `POST /listener/ensure`、`/listener/stop`；`GET /listener/schema`；`POST`/`GET /listener/traces[/{id}]` | `listener:ensure`/`stop`、`evidence:read`、`listener:trace` |
-| 观察 | `POST /observations`（202，支持 `Idempotency-Key`） | `observation:create` |
-| 操作与证据 | `GET /operations/{id}[/wait·/cancel]`、`GET /artifacts/{id}[/content]` | `evidence:read`（cancel 需 `observation:create`） |
-| 帧索引 / 分钟分桶 | `GET /listener/indexes`、`/{id}/frames[/{frame_id}]`、`/listener/minute-periods` | `evidence:read` |
-| 模拟集中器 | `POST /simcon/verify`、`/simcon/step`、`/simcon/open`/`close`；`GET /simcon/frames`、`/simcon/session`、`/simcon/store/events`、`/simcon/store/snapshots[/{id}]` | `simcon:verify` / `simcon:send` / `simcon:read` |
-
-v1 专家 checklist（逐步控制串口或维护旧客户端时才用）：`POST /admin/grants` 拿 token（人做）→ `GET /status` 确认后端就绪与串口在线 → `POST /module-sessions/ensure` → `POST /flash-operations`/`POST /observations`/`POST /simcon/verify` → `GET /operations/{id}/wait` 到终态 → `GET /artifacts/{id}/content` 取证据正文 → 收尾 `POST /module-sessions/{id}/stop`、`/listener/stop`、`/simcon/close`。
+v1 语义：每接口校验 **scope + resource**；长任务返回 `operation_id` 轮询到终态；幂等同 v2；烧录强制 `firmware_roots` 白名单。端点组全表、scope 对照与专家 checklist（逐步控制串口或维护旧客户端时用）→ `references/scopes.md`。
 
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
@@ -329,7 +301,7 @@ v1 专家 checklist（逐步控制串口或维护旧客户端时才用）：`POS
 
 ### §4.1 观察任务语义（先建观察，再制造事件）
 
-最小链：`POST /api/ai/v1/observations` → `GET /operations/{id}/wait?timeout_seconds=30` → `GET /artifacts/{artifact_id}/content`。**时序是关键**：module_log 观察只盯"创建时刻之后"的新日志——先建观察，再制造目标事件。
+**红线（时序关键）**：module_log 观察只盯"创建时刻之后"的新日志——**先建观察，再制造目标事件**，事后补观察等于没观察。最小链：`POST /api/ai/v1/observations` → `GET /operations/{id}/wait?timeout_seconds=30` → `GET /artifacts/{artifact_id}/content`。
 
 ```bash
 curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
@@ -344,10 +316,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
   }'
 ```
 
-幂等：`client_request_id` 缺省时取请求头 `Idempotency-Key`。**match 矩阵**（叶子 3 + 复合 2）：
-
-- 叶子：`literal`（value 非空 ≤512 字符，带 `case_sensitive`）、`regex`（≤256 字符）、`loghook_rule`（`rule_id` 须是该模块的 module_log 规则，**从 `GET /api/dict/rules` 查**，无鉴权）。
-- 复合：`sequence`（`steps` 叶子×1–16 + `max_interval_ms` 1–3600000，按顺序出现）、`not_seen`（`matcher` 叶子；仅**闭合窗**未出现才判 pass，live 窗到期且无可信到达时间 → `inconclusive`）。
+幂等：`client_request_id` 缺省时取请求头 `Idempotency-Key`。**match 必填**（缺省直接 422）：叶子 `literal` / `regex` / `loghook_rule`（`rule_id` 须是该模块的规则，从 `GET /api/dict/rules` 查，无鉴权）；复合 `sequence`（`steps`×1–16 按顺序出现）/ `not_seen`（仅**闭合窗**未出现才判 pass，live 窗到期且无可信到达时间 → `inconclusive`）。
 
 | window.mode | 参数 | 约束 |
 | --- | --- | --- |
@@ -355,19 +324,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 | `time_range` | ISO 8601 `start`/`end` | 须落在当前内存日志边界内 |
 | `cursor_range` | `start_seq`/`end_seq` | 回放既有区间，跨度 ≤10000 行且区间已闭合 |
 
-**侦听台帧观察（source=listener）**：
-
-```bash
--d '{"source":"listener",
-     "target":{"mapping_id":"listener","capture":"current"},
-     "window":{"mode":"live","timeout_seconds":180},
-     "match":{"kind":"parsed_frame","frame_kind":"central_beacon","selector":"first"}}'
-```
-
-- `match` **必填**（缺省直接 422），kind 仅 `parsed_frame` / `frame_query`；过滤三件套 `frame_kind`（当前仅 `central_beacon`，留空=任意）、`where`（`{"path":"analysis.full.<字段>","op":"eq","value":...}`，op 目前仅 eq）、`selector`（first/last/all/first_per_minute/nth）。
-- `mapping_id` 用 `listener`（不是 `listener-main`）；字段路径先 `GET /api/ai/v1/listener/schema` 确认；window 同样支持 time_range / cursor_range（须给 `index_id` + `start_frame_id`/`end_frame_id`，跨度 ≤500 帧）。
-
-> 来源：ai-control-plane/references/observations.md；ai-control-plane/references/operation-guide.md
+完整 match 矩阵、侦听台帧观察（**`mapping_id` 用 `listener` 不是 `listener-main`**、`frame_kind`/`where`/`selector`、window 参数）→ `references/observations.md`。
 
 ### §4.2 证据落盘与 operation 状态机
 
@@ -378,43 +335,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/observations \
 
 > 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/observations.md；ai-control-plane/references/api-contract.md
 
-## §5 编排与页面
-
-### §5.1 验证编排 REST（无鉴权，可选）
-
-```bash
-curl http://127.0.0.1:8790/api/scenarios               # 场景模板清单（/api/scenarios/<id>[/task]）
-curl -X POST http://127.0.0.1:8790/api/run \
-  -H "Content-Type: application/json" -d '<RunRequest，字段见 apps/workbench/orchestration/dto.py>'
-# → 立即返回 run 视图（status=running），轮询 GET /api/run/<run_id> 到终态
-#   passed / failed / cancelled / error / inconclusive
-# 报告 GET /api/run/<id>/report；产物 GET /api/run/<id>/artifacts[/{artifact_id}]；取消 POST /api/run/<id>/cancel
-```
-
-- 其余：`GET /api/runs?limit≤200`（历史）、`POST /api/compare`、`POST /api/feedback`（比对/归因，不落 Run）。整链是烧录→监控→激励→比对→反馈→报告。
-- 与 AI 控制面的取舍：要**授权审计/证据链/幂等**走 `/api/ai/v1`；只是**直接驱动一次全链路验证拿报告**，`/api/run` 更短（无 token、无 operation）。
-
-> 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/features.md
-
-### §5.2 前端调用方映射（页面 → API 组 → 前缀机制）
-
-| 前端文件 | 调用组 | 前缀机制 |
-| --- | --- | --- |
-| `pages/listener/{app,frames-pro}.js` | 侦听台日志/帧/串口/fs | **硬编码** `/api/listener/...`（独立版同逻辑硬编码 `/api/...`，两副本并存） |
-| `pages/trace/trace.js` | 通信流追踪 + 帧详情 + indexes | 硬编码，注意双前缀 |
-| `pages/dict/dict.js`、`pages/scenario/scenario.js`、`workbench.html` | 协议字典 / 编排 | 硬编码 `/api/dict`、`/api/...` |
-| `pages/simcon/simcon.js` | 模拟集中器 + 构帧预览字典 | 硬编码 `/api/simcon` |
-| `pages/module-serial/module-serial.js`（两副本） | 模块日志 + `/fs/*` + `/loghooks/*` | `API_BASE = body[data-api-base] ?? "/api"` ＋ 路径自带 `/module-serial` 命名空间 → 两形态通用 |
-| `pages/serial-profile/serial-profile.js` | 串口 Profile | `API_BASE`（`/api`） |
-| AI agent（无页面） | v2（默认）/ v1（专家兼容） | 直连 8790 `/api/ai/v2`；需要旧细粒度能力时 `/api/ai/v1` |
-
-> 来源：ai-control-plane/references/api-contract.md
-
-### §5.3 与页面操作的关系
-
-AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / listener service）：串口同一时刻独占，**页面与 AI 不能同时开同一串口**（409）。ADR-27 修的前端 bug（`ms-refresh-speed` 缺失导致实时日志页无反应）**不影响 API 行为**；主题/保活只影响页面观感（§8 G1/G2），与 AI 调用面无关。
-
-> 来源：ai-control-plane/references/operation-guide.md
+（原 §5 编排与页面已下沉：全链路验证编排 REST 与前端调用方映射 → references/orchestration.md，AI 日常任务用不到。）
 
 ## §6 契约红线（完整版）与通用约定
 
@@ -431,7 +352,7 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 
 ### §6.2 行为红线（8 条，完整表述）
 
-1. **授权归人、scope 最小化**：`admin/grants` 只由人本机执行（127.0.0.1 + admin key）；AI 只使用已有 token，不自签、不扩权、不转交。只申请本次任务需要的 scope（§2.2），能不给 `resources:["*"]` 就不给。
+1. **授权在对话、签发自执行、scope 最小化**：用户明确授权后 AI 可自行签发最小权限 grant（本机 127.0.0.1 + admin key），也可复用已有 token；只申请本次任务需要的 scope（§2.2），能不给 `resources:["*"]` 就不给；不扩权、不转交、不把 token 写进日志/提交。
 2. **用完即止**：完成本次任务即停——不开任务外的会话、不跑任务外的验证、不做"顺手"的全流程；结束前把本次开的会话/采集/串口收尾（§3.7）。
 3. **串口独占**：同一物理串口同一时刻一个持有者（AI 与前端共享规则）；开了就关（stop/close 释放；v2 stop 卡 waiting 时以物理串口释放为准）；409 时等待或换口，**不硬抢、不并发重试**。
 4. **开串口前先 preflight**：先 `/api/serial-bridge/status` + `/verify`；`workbench_ready=false` 时不许 ensure/open（细节见 `wb-serial`）。
@@ -459,7 +380,7 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 
 | 码 | 含义 | 常见具体原因 | 处置 |
 | --- | --- | --- | --- |
-| 401 | 缺 token / 无效 / 过期 / 已撤销 | v2 `capabilities` 401「缺少 Bearer token」= 启动漏了 `WORKBENCH_LOCAL_FULL_ACCESS=1` 或非真 loopback；v1 业务端点即使 local_full 也要 token | v2 按 §1.2 重启；v1 按 §2 找人签发，别自签 |
+| 401 | 缺 token / 无效 / 过期 / 已撤销 | v2 `capabilities` 401「缺少 Bearer token」= 启动漏了 `WORKBENCH_LOCAL_FULL_ACCESS=1` 或非真 loopback；v1 业务端点即使 local_full 也要 token | v2 按 §1.2 重启；v1 按 §2 签发（用户授权后 AI 可自签）或复用已有 token |
 | 403 | 越权 | scope/resource 不匹配；固件路径不在授权 `firmware_roots`（"未配置允许烧录目录"）；非本机发授权；L3 ref 不属于本 job | 补 scope / 换带 `firmware_roots` 的授权 / 只用本 job 的 ref |
 | 404 | 资源不存在 | 会话、operation、Artifact、索引、场景 task 文件缺失 | 校验 id 与索引是否存在；场景 task 缺失是已知缺口（§8） |
 | 409 | **资源冲突，不是故障** | 串口被页面/AI 占用；串口采集与日志索引互斥；观察活跃时普通 stop；幂等冲突；verify 运行守卫 | 等待、换口或 `force:true`；不并发重试；不做排障式排查 |
@@ -471,15 +392,9 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 
 > 来源：ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/auth.md
 
-## §8 已知缺口
+## §8 已知缺口（G1–G5，明细下沉）
 
-| # | 缺口 | 位置 | 影响 | 现状/绕法 |
-| --- | --- | --- | --- | --- |
-| G1 | `refreshFrames` 空结果分支 `var body` 声明在使用之后（var 提升为 undefined），`body.querySelector` 抛 TypeError 被静默 `.catch` 吞掉 | `apps/workbench/static/pages/simcon/simcon.js:271-277` | 空会话/过滤无结果时列表停在"加载中…" | **2026-08-31 已修复**（`var body` 上移），留作审核记录 |
-| G2 | 保活 iframe 切主题不实时跟随：外壳 `switchTheme` 对所有 iframe `postMessage({type:"wb-theme-change"})`，但只有 module-serial/maintenance/serial-profile 三页装了监听 | `pages/trace\|dict\|scenario\|simcon`、`pages/listener/index.html`、`workbench.html` | 已打开页签保持旧主题直到重载 | **2026-08-31 已修复**（六页补监听，9 个保活子页全部跟随） |
-| G3 | `join_anhui` / `open_close` / `search_meter` 三个场景 `tasks/*.json` 缺失 | 编排场景模板 | `GET /api/scenarios/{id}/task` 404 明确报错，页面红条提示 | 端点行为正确，缺的是模板文件；换可用场景 |
-| G4 | 侦听台依赖 C# DLL/pythonnet，缺失时挂载降级；`parse_backend=none` 时缺解析字段 | workbench 挂载层 / 侦听台解析后端 | `listener_mounted=false`、`/parse` 降级 503、`parse_unavailable` | 采帧与索引照用，不把未解析帧归入业务分类；要字段就起 Windows 解析网关（仅人执行，§6.1） |
-| G5 | `.md` 路由表不被库存脚本校验 | `verify_api_inventory.py` | 只校验 v2 8 条路由命名 schema、AI 能力映射、listener schema 能力位 | 改接口时按 §6.3 第 1 条人工同步文档并跑契约测试 |
+一句话版：G1/G2 已修复（留档）；G3 三个场景模板 `tasks/*.json` 缺失（换可用场景）；G4 侦听台/解析降级 `parse_backend=none`（要字段起 Windows 解析网关，仅人执行）；G5 `.md` 路由表不进库存校验（改接口按 §6.3 第 1 条人工同步）。明细与代码位置 → `references/known-gaps.md`。
 
 > 来源：ai-control-plane/references/api-contract.md；ai-control-plane/references/features.md；ai-control-plane/references/operation-guide.md
 
@@ -487,7 +402,19 @@ AI 控制面复用与页面**同一套后端服务**（`ModuleSerialService` / l
 
 ## 附录 · 深水事实库（按节读，不复制）
 
-精确契约在入口技能事实库：`auth.md`(43) 授权原文、`features.md`(119) 能力全表、`observations.md`(72) 观察语义、
+**本技能下沉件**（`references/`，按需读、不随任务常载）：
+
+| 文件 | 内容 | 何时读 |
+| --- | --- | --- |
+| `v2-contract.md` | 八条公开路径全表、investigations 完整请求示例、找回 job 参数细节 | 提交/轮询任务拿不准形状时 |
+| `scopes.md` | scope→能力全表（14 种）、v1 端点组与专家 checklist | 签非烧录类 grant、维护 v1 旧客户端 |
+| `observations.md` | 观察 match 矩阵、侦听台帧观察完整参数 | 建观察任务 |
+| `semantic-queries.md` | `trace_query` / `minute_periods` 完整契约 | 漏点/通信流追踪 |
+| `deployment.md` | 挂载代理语义、剥前缀、双前缀特例、挂载降级 | 排查挂载/前缀、改接口 |
+| `orchestration.md` | 编排 REST（`/api/run` 全链路）、前端调用方映射 | 无 token 跑全链路、排查前端 |
+| `known-gaps.md` | G1–G5 明细 | 留档审计 |
+
+**入口技能事实库**（更深的契约原文）：`ai-control-plane/references/` 下 `auth.md`(43) 授权原文、`features.md`(119) 能力全表、`observations.md`(72) 观察语义、
 `api-contract.md`(491) §1/§2/§6/§6.1/§7/§10/§11/§12、`operation-guide.md`(520) §1/§2/§3/§7/§11–§15。
 旧门面归档：`_归档-门面v2.9.md`(257)，仅当新文档查不到时参考。
 > 路径前缀：ai-control-plane/references/
