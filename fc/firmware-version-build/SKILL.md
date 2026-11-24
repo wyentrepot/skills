@@ -26,6 +26,13 @@ description: Use when 需要编译/打包 CCO、ECU 或 STA 固件（make cco / 
 | make sta_venus2m* / STA固件 / 表模块 / 大同小异 / 小同大异 | STA | references/sta.md | scripts/build_variants.sh |
 | test-create / Unity / 测试固件 | 单元测试 | references/unit-test.md | 见该层 |
 
+### 不属于本技能的构建：海思 DW31（`/home/H_HS/GW/plc-project`）
+
+海思 GW 工程是 CMake + SDK 体系，入口是 `bash scripts/build.sh {sg_cco|sg_fusion_cco|sg_sta}`，
+产物在 `out/<target>/`，**不走本技能的 make/变体流程**。这类任务改读
+`fc/hs-dw31/references/build.md`（含包选择、白名单、常见坑）。
+判据：工程根下有 `scripts/build.sh` 且 `Platform/plc-sdk` 为子模块 → 海思 GW；工程根是 `sta/`+`make/Makefile` → 本技能。
+
 ## 通用红线（跨 cco/sta/单测）
 
 1. **版本字段歧义先确认**：需求版本串（如 `sv2601-svdate260422-1401`）可能含误导/无关字段。

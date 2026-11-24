@@ -2,6 +2,24 @@
 
 原 `sta-version-build` 主体迁移至此层。
 
+## 仓库布局表（2026-11-18 补，防现场核对）
+
+| 仓库根 | 布局 | 版本宏位置 | 说明 |
+|---|---|---|---|
+| `/home/H_STA/04/sta`（及 02） | 仓库根下有 `sta/` 构建目录 | `sta/protocol/aps/{yxsm,diqu}_conf.h` | 文档原始假设的布局 |
+| `/home/H_STA/01/sta` | **git 根即构建目录**（无 `sta/` 一层） | `protocol/aps/{yxsm,diqu}_conf.h` | 安徽线；产物在 `firmware/sta_venus2m/` |
+| `/home/H_STA/03`、`04` 的 `sta/firmware/sta_venus2m_v7/` | — | — | **已编译产物**（v7 平台，勿与"版本号 0x007"混淆） |
+
+**版本语义速查**：`isv = (DI_QU_MODE<<16)|(PLATFORM<<12)|FC_VERSION_L`；`hv`=HVER、`sv`=SVERSION、`idate`=INTERNAL_VER_DATE、`isv` 里的 FC_VERSION_L 即"版本号 vN"（如 v7 = `FC_VERSION_L 0x007` → isv090007，安徽 AN_HUI_MODE=0x9）。`diqu_conf.h` 常有**未提交的版本宏改动**（团队习惯直改工作区），代表当前意图版本，编译前按块作用域核对而非 git 基线。
+
+## 编译产物机器清单
+
+`build_variants.sh` 每个变体编译归档后，在**仓库根**写 `latest_flash.json`（`{repo,target,updated_at,artifacts[],latest:{bin_path,md5,bytes,sversion,sversion_date,fc_version_l,idate}}`）。下游烧录直接消费：
+
+```bash
+<wb-base 技能根>/scripts/wb.py flash run --latest <仓库根> --mapping sta-main
+```
+
 ## 仓库与构建
 
 - 仓库：`/home/H_STA/04/sta`；`make` 必须在 `sta/` 目录下运行（Makefile 相对路径基于 sta/）。

@@ -348,6 +348,32 @@ build_variant() {
   cp -r firmware/"$TARGET"/debug "archive_$TARGET/$v/debug"
   echo "  已归档 -> archive_$TARGET/$v/ ($(basename "${zips[0]}"))"
 
+  # 交付清单（机器可读；wb flash run --latest 消费）
+  local iapbin
+  iapbin=$(ls firmware/"$TARGET"/iap_*.bin 2>/dev/null | head -1)
+  if [ -n "$iapbin" ]; then
+    python3 - "$ROOT" "$TARGET" "$v" "$iapbin" "$(printf %06x "$NSV")" "$datef" "$(printf %03x "$NFC")" "$idatef" <<'PYEOF' 2>/dev/null || echo "  警告: latest_flash.json 写入失败"
+import hashlib, json, os, sys, time
+root, target, variant, binp, sv, datef, fcl, idate = sys.argv[1:9]
+path = os.path.join(root, "latest_flash.json")
+try:
+    doc = json.load(open(path))
+except Exception:
+    doc = {"repo": root, "artifacts": []}
+doc["repo"], doc["target"] = root, target
+doc["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+art = {"variant": variant, "bin_path": os.path.abspath(binp),
+       "md5": hashlib.md5(open(binp, "rb").read()).hexdigest(),
+       "bytes": os.path.getsize(binp),
+       "sversion": "0x" + sv, "sversion_date": datef,
+       "fc_version_l": "0x" + fcl, "idate": idate}
+doc["artifacts"] = [a for a in doc.get("artifacts", []) if a.get("variant") != variant] + [art]
+doc["latest"] = art
+json.dump(doc, open(path, "w"), ensure_ascii=False, indent=2)
+print("  交付清单 -> %s" % path)
+PYEOF
+  fi
+
   restore_headers
   echo "  头文件已恢复"
 }
