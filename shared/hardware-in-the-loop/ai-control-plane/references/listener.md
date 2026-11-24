@@ -139,6 +139,28 @@ curl "http://127.0.0.1:8790/api/ai/v1/listener/minute-periods?task_no=1&cco_tei=
   或 `powershell -File <WORKBENCH_ROOT>/tools/scripts/uart-map.ps1 -Action start-gateway`
   （详见 `<WORKBENCH_ROOT>/tools/scripts/README.md`）。WSL/Linux 侧无此步骤。
 - **排查提示**：帧缺协议明细时先看 `parse_backend`；`none` → 先起网关再继续，别怀疑数据/链路。
+- **`none` 档下仍可物化四列**（2026-11 起）：`flow_dir` / `app_id` / `meter_addrs` / `sta_tei`
+  由纯 Python 兜底（`adapter_dualmac` → `trace_extract`），trace 回放与方向/表地址/任务号聚合可用；
+  缺的只有 DLL 专有字段（`frm_type`、`Detail`、`ack_peer`）。
+  判读红线：`none` 下 `network_assessment` 可能 `overall_health=healthy` 而
+  `avg_success_rate=null`、`scan_method=undetected` —— 先看 null 再看评级。
+
+## 日志行格式与可索引性（2026-11 起）
+
+索引器逐行四分类，只把"成对 7E"的帧行写入 `frames`：
+
+| 行形态 | 归类 | 入 frames | 计数列 |
+| --- | --- | --- | --- |
+| `[序号][HH:MM:SS.mmm]7E …` | 帧记录 | ✅ | — |
+| `[YYYYMMDD-HH:MM:SS:mmm]…7E …`（单括号） | 帧记录（时间归一） | ✅ | — |
+| `[Error]7E …`（无时钟） | 无时间戳帧 | ✅（沿用上一行时间） | `untimed_count` |
+| 单括号头但无成对 7E | 非帧文本 | ❌ | `text_count` |
+| 无可识别头部 | 忽略 | ❌ | — |
+
+- `status` 因此多出 `text_count` / `untimed_count` 两个字段；完成文案在 `帧数=0 且 text_count>0`
+  时才说"帧索引基本不适用"，帧+文本混排只报"另有 N 条非帧文本记录未入索引"。
+- 2 字节退化帧（`fseq:7e,sseq:7e` 这类零散 `7e`）不入库。
+- **CCO 模块文本日志不该走帧索引**：只会得到 `帧数≈0`；按关键字/时间窗检索用离线脚本或 grep。
 
 ## v2 语义查询与分层证据（REQS-0022，默认 AI 入口）
 

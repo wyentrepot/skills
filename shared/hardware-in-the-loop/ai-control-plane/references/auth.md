@@ -1,9 +1,11 @@
-# 授权（人来做，AI 只持有 token）
+# 授权（对话授权后 AI 可自签，token 仍只归本任务）
 
 > 前置：workbench 已在 8790 运行（`curl http://127.0.0.1:8790/api/health` → 200）；
 > 人工授权密钥已配置（`tools/scripts/一键生成AI密钥.bat` 一键装好，或环境变量 `WORKBENCH_AI_ADMIN_KEY`）。
 
-## 签发（仅限 workbench 本机 127.0.0.1 + admin key）
+## 签发（本机 127.0.0.1 + admin key；对话授权后 AI 可自执行）
+
+**授权在对话，签发可自执行**：用户明确说"允许 / 可以烧 / 直接升"即为授权；拿到授权后 AI 可自行签发**最小权限 grant**（仅本次任务 scope + 必要 `firmware_roots` + 短 TTL，建议 ≤3600s），或复用已有 token，然后直接提交烧录/升级。仍禁止：无授权就签 grant、扩大 scope（能窄就不给 `resources:["*"]`）、把 token 写进日志/提交、转交他人、靠重启工作台塞 env 白名单绕过（审计会记 `authorization_source`）。
 
 ```bash
 curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \

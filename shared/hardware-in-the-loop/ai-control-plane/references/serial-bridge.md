@@ -100,20 +100,25 @@ CCO 自适应序列（`data/logs/serial_bridge_evidence_20261022/`）：
 
 ## 边界
 
-- **人机交接**：`tools/scripts/wsl环境部署.bat` 菜单 **[6]** 一键启停 Python 桥
-  （启动 = WSL supervisor + Windows `pythonw` 桥；停止只停 Windows 桥，立即释放 COM），
-  **[7]** 查看桥状态。非交互：`uart-map.ps1 -Action bridge-toggle|bridge-start|bridge-stop|bridge-status`。
-- **不依赖 usbipd / Hyper-V 防火墙**：桥走 Windows→WSL 的 TCP localhost；新版菜单
-  [6]/[7] 不调用 usbipd，[3] 的 usbipd 视图有 3 秒超时。旧脚本若卡在防火墙检查，
-  换用新版 `uart-map.ps1`。前提是 COM 在 Windows 侧可用（`Shared`/未 `Attached`）。
+- **启停归宿主控制面（2026-11-17 起）**：Windows 侧常驻 `wsl-control`（8766）统一管桥的启停/看板，
+  ```bash
+  HOST=$(ip route show default | awk '{print $3}'); TOKEN=$(cat /mnt/c/Users/*/.wsl-control/token | tr -d '\r\n')
+  curl -s -X POST -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/services/bridge/start   # 或 stop / restart
+  curl -s -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports                          # 每口 owner/通道
+  ```
+  人机侧：`tools/win_host/uart-map.ps1`（菜单）或看板 `http://127.0.0.1:8766/`。
+- **usbipd 已移除**：不要再 `usbipd attach/detach`；`/api/usbipd/*` 返回 410。桥走 Windows→WSL 的 TCP localhost，
+  不需要 Hyper-V 防火墙规则、不需要管理员。
+- **一个口一个持有者**：桥 / 诊断服务 8765 / 厂商工具 / 直连脚本互斥；跨域让口用
+  `POST /api/v1/ports/<id>/disable`，用完 `enable`（会重启 Windows 桥 5–15s，WSL PTY 与 supervisor 也一并重启）。
 - **一口一主**：同一物理口同一时刻一个持有者；409/端口占用不是故障。
 - **PTY 侧 parity=N**；真实 E/O 固定在 Windows 侧 `serial_bridge.json`。
 - 无 DTR/RTS/流控；XMODEM 动态波特率未在桥上完整验证，烧录仍建议单档。
 - Windows 桥必须常驻：会话级 `python.exe` 适合调试；长期用按项目技能
   `skills/share/serial-bridge/SKILL.md` 的「Windows 常驻」复制到 Windows
   本地目录后用 `pythonw.exe`。不要从 WSL 的 UNC 当前目录 `cmd start`。
-- 若重新 usbipd attach：`serial_ports.json` 的 `usb_busid` 已清空；要么保持
-  usbipd detached，要么恢复备份并停 WSL 桥。
+- Windows 桥 pid 文件可能丢失（旧脚本会删）：控制面会用 netstat 反查桥进程兜底，
+  `bridge.windows.detected_by` 会写 `pid_file` 或 `netstat`，不要因为 pid 文件没了就判“桥没跑”。
 
 ## 故障速查
 
@@ -124,7 +129,8 @@ CCO 自适应序列（`data/logs/serial_bridge_evidence_20261022/`）：
 | `control_connected=false` | 控制口（`tcp_port+1000`）被占用/未监听；动态波特率不可用 |
 | `checks.open_ok=false` + `Invalid argument` | 用了 `parity="E"`；工作台/脚本改 `N` |
 | `mapping.baudrate` 与 `desired_baud` 不一致 | verify 会按映射切换；先对齐业务/CCO 当前 baud |
-| `wsl_bridge.lock` 被占用 | 已有实例；`wsl status` 看 pid，必要时 `wsl stop` |
+| `wsl_bridge.lock` 被占用 | 已有实例；`wsl status` 看 pid，必要时 `wsl stop`（或控制面 `services/bridge/restart`） |
+| 改完 `serial_bridge.json` 不生效 | `config_stale=true`；`POST /api/v1/ports/<id>/disable|enable`（会重启 supervisor）或 `services/bridge/restart`，**不要**用 SIGHUP |
 
 ## 相关
 

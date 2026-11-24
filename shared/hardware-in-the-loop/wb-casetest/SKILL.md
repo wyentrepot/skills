@@ -1,83 +1,120 @@
 ---
 name: wb-casetest
-description: 什么时候用我：要把送检/厂验用例（非台体）做成可重复执行的自动化测试——从知识库用例库挑出本环境能测的项、写用例脚本、指定运行、串联成链路、每项产一份带支持与否/验证状态的文档。碰到"这个用例能不能自动测""帮我搭一套回归""跑一条端到端链路"时用我。单帧下发/构帧调试不归我（走 wb-simcon / wb-appframe）。
-argument-hint: "[任务，例如 把 CCO 03H-F1 做成用例 / 跑 cco-afn-smoke 链 / 列一下本环境能测哪些用例]"
+description: 什么时候用我：仅在用户**明确指派**「黑盒测试 / 跑用例 / 用例回归 / 搭回归链 / 用例库盘点」时用我——在 CCO/STA/ECU 台架上以「给入参 → 跑 → 出四态结论」的零参与方式执行用例，或按知识库用例库补用例、标可测性、跑长跑。用户没明确指派时不要加载；单帧下发/构帧调试走 wb-simcon / wb-appframe，烧录走 wb-flash。
+argument-hint: "[任务，例如 跑 meter_daily / 把 CCO 03H-F1 做成用例 / 盘一下本环境能测哪些用例]"
 metadata:
   author: reasonix
-  version: "1.0.0"
-  applies-to: 任意有工作台（8790）+ CCO/STA 台架的工作区（WORKBENCH_LOCAL_FULL_ACCESS=1 免 token 走 v2）
-  source: 2026-11-04 CCO/STA 非台体内测项自动化批次沉淀（autotest/ 框架 + 22 用例实跑）
+  version: "1.1.0"
+  applies-to: 有工作台（8790）+ CCO/STA 台架、且仓库内有 libs/case_runner 的工程（ZZT_SELF 现状）
+  source: 2026-11-04 首批沉淀；2026-11-24 对齐 REQS-0042/0043 的真实执行载体（case_run.py + 四态 verdict），用例来源改为指索引不抄数字
 ---
 
-# 用例自动化测试：指定运行 · 链路编排 · 逐项文档（wb-casetest）
+# 黑盒用例测试：单入口执行 · 零参与 · 四态结论（wb-casetest）
 
-把「知识库用例库 → 本环境可测清单 → 用例脚本 → 实跑证据 → 链路」串成一条可重复的流水线。
-框架本体在 `scripts/`（runner.py + wbclient.py + template_case.py），与项目零耦合，只调工作台 HTTP。
+**核心原则**：一条用例就是一次「给入参 → 跑 → 出结论」。从触发到出结论，**全程不需要人看屏、不需要 AI 判断、不需要补参数**。
 
-## 0. 三步上手
+## 0. 执行载体（先认清是哪一套）
+
+| 层 | 东西 | 位置 |
+|---|---|---|
+| 声明 | 块 / 事实 / 用例 / 方案 JSON | `libs/case_runner/data/{blocks,facts,cases,case_suites}/` |
+| 引擎 | 四层模型 `Case → Block → Fact → Capability` | `libs/case_runner/` |
+| 入口 | CLI | `tools/scripts/case_run.py`（list/show/run/probe/check） |
+| 服务 | API + UI | `/api/cases/*`（`apps/workbench/cases_api.py`） |
+| 证据 | 每轮落盘 | `data/case_runs/<run_id>/result.json` |
+
+本技能 `scripts/`（runner.py + wbclient.py + template_case.py）是 2026-11-04 的**外部兜底框架**：仅当工程里没有 `libs/case_runner` 时才用它（见 §8）。
+
+## 1. 三步上手
 
 ```bash
-# 1) 把本技能 scripts/ 复制为项目里的独立测试目录（如 <PROJECT>/autotest/）
-mkdir -p <PROJECT>/autotest && cp -r scripts/* <PROJECT>/autotest/
-# 2) 按 scripts/template_case.py 写 cases/<id>.py（CASE 元数据 + run(ctx)）
-# 3) 显式指定才运行（无参数只列清单，不动任何串口）
-cd <PROJECT>/autotest
-python3 runner.py --list                  # 清单 + 支持与否 + 最近结果
-python3 runner.py --case <id> [id…]       # 单个/多个
-python3 runner.py --chain cco-mclt-e2e    # 链路（chains.json）
-python3 runner.py --group cco-afn         # 按 tag 组
+python3 tools/scripts/case_run.py list --json                 # 计数：块/事实/用例/方案
+python3 tools/scripts/case_run.py show meter_daily            # 步骤 + 块清单 + needs
+python3 tools/scripts/case_run.py run --case meter_daily --json
+python3 tools/scripts/case_run.py run --suite meter_smoke_min --timeout 600 --json
+python3 tools/scripts/case_run.py probe --all --readonly --json   # 只读自检，不动台架
+python3 tools/scripts/case_run.py check                       # 声明校验，problems 必须为空
 ```
 
-## 1. 测试项从哪来（非台体口径）
+- **唯一入参**是 `--params '{...}'`；地址参数只叫 `meter_addr`（旧名 `addr/meters` 直接退出码 3，不给兼容别名）。
+- 工作台地址发现顺序：`--base-url` > 环境变量 `WORKBENCH_BASE` > `data/runtime/workbench.json` > 本机 8790。
+- **加用例 = 加声明，不改引擎**：用例 JSON 用 `plan` 步骤实例化块（`id` / `block` / `params` / `on_fail`），`needs` 声明前置事实，`tags` 给分类。
 
-- **用例库**（obsidian 库 `用例库/`）＝自家送检/厂验用例：STA 339 例（台账 123~140）、CCO 241 例（台账 144~155），能力域蒸馏 141/142/143/156/157。
-- **台体类**（`台体测试/117/118`）不在此列，按约排除。
-- 筛选三问：① 被测设备是本环境实板/模拟器能替代的吗？② 前置要几台设备（第二 STA/II采/真实电表/水表→不可测）？③ 判据要目视/破坏性（灯语/升级/掉电/复位→不安排）？
-- 输出三档：`supported=yes`（实跑）/`partial`（子集或工具链受限）/`no`（环境不具备，仍要单独出文档）。
+## 2. 用例从哪来（指索引，别抄数字）
 
-## 2. 用例契约（照 template_case.py）
+两个「用例库」不是一回事，别混：
 
-```python
-CASE = {"id": "...", "title": "...", "source": "<用例库卡+行号>", "supported": "yes|partial|no",
-        "supported_reason": "...", "tags": ["cco-afn"], "desc": "...", "how": "..."}
-def run(ctx):
-    r = ctx.verify([{"name": "s1", "send": {"afn": "03", "fn": 1, "params": {}},
-                     "expect": {"afn": "03", "fn": 1}, "expect_timeout": 8}])
-    return True, "证据一句话"
-```
+| | 是什么 | 去哪查 |
+|---|---|---|
+| 知识库用例库 | 自家送检/厂验原始用例，按设备分（`STA/`、`CCO/`，各含 `台账/` + `能力域/`） | `/01-workfile-ai/04-obsidian/obsidian/用例库/00_总览.md` 进门 |
+| 已实例化用例 | 引擎里真能跑的（当前 7 条，随批次增长） | `case_run list --cases` |
 
-ctx 能力：`verify(steps)`（v2 任务，自动等 lease + 僵尸会话自愈）、`build_frame`（零成本预检）、
-`frames`、`simeter()`（wbclient 直连全部方法）、`shell_ro`（只读命令）。
+**规则：先查知识库，再落地成用例。** 不许凭记忆编判据；查不到出处的场景不写进用例库（标「库中未找到」）。
+本环境能力清单与逐条可测性标注在 `reqs/0043-case-library-expansion-and-soak/CASE-BACKLOG.md`（16 块 / 8 事实 / 台架条件 / 不可测原因）——**每次补用例前先读它，别重复盘**。
 
-## 3. 判据纪律
+筛选三问：① 被测设备本台架能替代吗？② 前置要几台设备（第二 STA / II 采 / 真实电表 → 不可测）？③ 判据要目视或破坏性（灯语 / 升级 / 掉电 / 复位）？
 
-- 步骤判定字段是 **`result:"pass"` 字符串**，不是布尔 `pass`；`matched`=对端实际回帧 hex。
-- **没带 expect 的 pass 只证明"帧发出去了"**；判"对端有反应"必须带 expect。
-- 数值类判据优先"与实际一致"（先读参照量再比对，如 03H-F4 主节点地址 ↔ 10-F104 节点地址），别硬编码用例库里的送检台价值（如厂商码 FC/F8 与台架实值 CF8F 不同）。
-- 失败降级要诚实：把根因写进 `supported_reason`（工具链缺口/环境缺位/事件未触发），不写"网络问题"糊弄。
+## 3. 四态结论（唯一判据）
 
-## 4. 硬约束与坑（2026-11-04 全部实测过）
+| verdict | 含义 | 退出码 |
+|---|---|---|
+| `pass` | 全部块与断言通过 | 0 |
+| `fail` | **被测对象真失败**（有应答但判据不成立） | 1 |
+| `inconclusive` | **说不清**（超时无应答 / 解析不出 / 等满仍学习态） | 2 |
+| `blocked` | **台架不具备**（预检不过 / 端口被占 / 缺参） | 5 |
 
-1. **verify 任务 240s 总超时硬闸**：长等待步骤（wait_mclt_stored 900s、expect_timeout>180s）会把 job 拖死强杀；设计原则=单 job ≤240s，长等待拆多轮短窗在用例层循环。
-2. **被强杀的任务留僵尸会话占口**：报错 `已被后端会话"模拟集中器"占用` 时，`POST /api/simcon/close` 释放后重试（runner 已内置自愈）。
-3. **lease 闸门 no_queue_reject**：并发 409 不硬抢；提交前 `GET /api/ai/v2/simcon/lease`，runner 自动等。
-4. **工作台重启会带走 simeter 串口会话**：重开 `POST /api/simeter/open {"mapping_id":"simeter"}`。
-5. **F230 存数库只在 simcon 会话开启期间累积**：06H 上报落在无会话窗口即丢；存数类判据必须保证窗口内会话在线。
-6. **11E3 自主补抄只在"缺数冻结"后约 9min 发生**：数据齐则不发生；做该事件判据先置 OAD `missing:true` 制造缺数（备份/ finally 恢复）。
-7. **STA 模块日志捕获可能停更**（`data/logs/模块/sta/*.log` mtime 验活）：以日志为判据的用例先查 mtime，停更即标 partial（结构性不可达），别空等。
-8. **设置类零扰动铁律**：只允许"读原值→写同值→回读"；绝不写不同配置（改地址/超时/时钟/档案都可能毁台架状态）。
-9. **1376.2 帧头 13B（68+L2+C1+R6+AFN1+DT2）、尾 CS 1B+16**：手写解析别套 698 的 HCS/FCS 2B 口径。
-10. **v1 面要 Bearer token**（`/api/ai/v1/*`），**v2 门面**（`/api/ai/v2/*`）本机 loopback + `WORKBENCH_LOCAL_FULL_ACCESS=1` 免 token，**直连面**（`/api/simcon/*`、`/api/simeter/*`）免 token——本框架统一走 v2。
+用法/参数错误 3、声明加载失败 4。多块混合按 `fail > blocked > inconclusive > pass` 取最严重者。
+**无应答绝不判 pass；`blocked` 绝不折算成 `fail`；`inconclusive` 也绝不冒充通过。**
 
-## 5. 链路与文档
+## 4. 黑盒纪律（REQS-0042 D-1~D-4）
 
-- `chains.json`：`{"<链名>": {"cases": [id…], "stop_on_fail": false, "desc": "..."}}`；建议按"冒烟链 / 端到端链 / 总链"三档。
-- runner 每次运行自动写 `results/<ts>_<id>.json` + `results/index.jsonl`，并维护 `docs/<id>.md`，
-  标题格式固定三段：**`<测试名> — <支持与否> — <是否已验证运行成功>`**。
-- 不可测项也要出文档（静态归类 + 覆盖说明指向可覆盖用例/链路），一次批次通常 300+ 份。
+| 判据 | 落地 |
+|---|---|
+| D-1 单入口 | 只给入参 + 触发运行，没有第二步 |
+| D-2 零参与 | `result.json` 的 `interventions[]` **恒空**；AI 不许中途补参、改判、盯屏看日志 |
+| D-3 结论可分 | 真失败 / 台架不具备 / 说不清三者不可混（§3） |
+| D-4 可复现 | 同入参 + 同台架 → 同结论；每轮落 `verdict` / `params` / `decisions[]` / `self_healed` / 时间戳 / 台架快照 |
 
-## 6. 红线
+默认输出是**报告式**：一句话结论 + 人话原因 + 证据路径，**不出现块名**；要看块 id 加 `--verbose`（D11-1/D11-2）。
 
-- 不 push 任何项目仓库；不重启工作台（除非任务明确要求且按 HANDOVER 环境变量重启）；不改 profile 文件。
-- 串口物理独占：simcon 口用例与 cco-main/sta-main 口用例可并行，但同口严格串行。
-- 测试项来源以知识库为准，别凭记忆编判据。
+常见借口 → 现实：
+
+| 借口 | 现实 |
+|---|---|
+| 「就缺一个参数，我补上」 | 缺参 = `blocked` / 退出码 3。补参就是人工参与，D-2 破功 |
+| 「等了 N 秒没应答，先算过吧」 | 无应答 = `inconclusive`；判 pass 就是假 PASS |
+| 「blocked 就按失败报」 | 台架不具备 ≠ 被测失败，混了没法追责 |
+| 「我盯一下日志再下结论」 | 结论只能来自 `result.json` 的四态 |
+| 「顺手改个地址/超时试试」 | 违反零扰动铁律（§6-8），可能毁台架状态 |
+
+## 5. 证据与长跑
+
+- 每轮落 `data/case_runs/<run_id>/result.json`；`--keep-runs N` 默认只留最近 30 轮（当前这一轮永不删）。
+- 长跑（REQS-0043 CL-5/CL-6）：≥20 轮连跑 + ≥2 小时持续，汇总轮次/结论/耗时/RSS；连续 3 轮 `blocked` 即停并报告。
+- 长跑主线用 `meter_daily`（不复位）；`meter_first_join` 会复位，复位后链路恢复实测 ≈10 分钟，别串进日常回路。
+
+## 6. 硬约束与坑
+
+1. **整轮预算 `--timeout` 默认 600s**：超时按 `inconclusive` 收尾并写明卡在哪个块。长等待拆成多轮短窗在用例层循环，别把一个 900s 等待塞进单轮。
+2. **端口被占**（`已被后端会话"模拟集中器"占用`）：`POST /api/simcon/close` 释放后重试；并发走 lease，`409 no_queue_reject` 不硬抢。
+3. **工作台重启会带走 simeter 串口会话**：重开 `POST /api/simeter/open {"mapping_id":"simeter"}`。
+4. **串口物理独占**：同口严格串行，不同口（simcon / cco-main / sta-main）可并行。
+5. **串口桥必须先起**（Windows 侧 `serial_bridge.py windows`），否则全口不可用 → 一律 `blocked`，不要当 fail 报。
+6. **台架拓扑**：`simcon(COM4) → CCO(COM12) → HPLC → STA(COM18) → 表口 → 模拟电表(COM20)`；侦听台 COM27 本环境不接。
+7. **电表 645 地址与 CCO 档案地址互为 6 字节整体反转**：对外只用 `meter_addr` 一种人读口径，别在用例里手拼线序。
+8. **设置类零扰动铁律**：只允许「读原值 → 写同值 → 回读」；绝不写不同配置（改地址/超时/时钟/档案都可能毁台架状态）。
+9. **协议时序类坑先查知识库**：如 F230 存数库只在会话在线期累积、11E3 自主补抄约 9 分钟后才发生。排等待预算前先查证，别套记忆。
+10. **1376.2 帧头 13B**（68+L2+C1+R6+AFN1+DT2）、尾 CS 1B+16：手写解析别套 698 的 HCS/FCS 2B 口径。
+11. **token**：v2 门面（`/api/ai/v2/*`）本机 loopback + `WORKBENCH_LOCAL_FULL_ACCESS=1` 免 token；`/api/cases/*` 与直连面（`/api/simcon/*`、`/api/simeter/*`）本机免 token。
+
+## 7. 红线
+
+- 不 push 任何项目仓库；不重启工作台（除非任务明确要求）。
+- 不改四层模型边界（Case/Block/Fact/Capability）：缺能力就加块，不改引擎语义。
+- 判据不许硬编码送检台价值（厂商码、地址等以台架实值为准：先读参照量再比对）。
+- AI 不参与执行：不在用例跑到一半时改参数、改判据、手工补一步。
+
+## 8. 兜底：`scripts/` 老框架
+
+工程里没有 `libs/case_runner` 时，可把 `scripts/` 复制成 `<PROJECT>/autotest/`，走 v2 verify 任务（`result:"pass"` 字符串判据、每项一份 `docs/<id>.md` 三段式标题、支持与否三档）。
+**两套语义不要混用**：v2 verify 的 `pass` 只证明「帧发出去了」，≠ 四态里的 `pass`。

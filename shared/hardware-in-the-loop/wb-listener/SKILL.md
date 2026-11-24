@@ -79,6 +79,24 @@ curl "http://127.0.0.1:8790/api/ai/v1/listener/indexes/<index_id>/frames?offset=
   `ai-control-plane/references/offline-analysis.md`，入口见 `wb-appframe`）。
 - 文件系统辅助：`GET /api/fs/roots`、`/api/fs/list?path=`、`/api/fs/last`；`/api/fs/pick` 弹原生框，非 Windows 返回 501。
 
+### 2.1 哪些日志行会被索引（2026-11 起，别再假设"只认一种格式"）
+
+索引器逐行四分类，**只认"成对 7E"的帧行**，其余行不再静默吞掉而是计数上报：
+
+| 行形态 | 归类 | 是否入 frames 表 | 例子 |
+|---|---|---|---|
+| `[序号][HH:MM:SS.mmm]7E …` | 帧记录 | ✅ | 侦听台/网关落盘 |
+| `[YYYYMMDD-HH:MM:SS:mmm]…7E …`（单括号 + 模块时间戳） | 帧记录（时间归一为 `HH:MM:SS.mmm`） | ✅ | `[20261116-10:27:33:672]7E FF 02 …` |
+| `[Error]7E …`（无时间戳） | 无时间戳帧 | ✅（沿用上一行时间，`untimed_count` 计数） | 串口工具异常帧 |
+| 单括号头但无成对 7E | 非帧文本 | ❌（`text_count` 计数） | CCO 模块日志 `[…seq] | info | aps.c (504)| no report delay` |
+| 无任何可识别头部 | 忽略 | ❌ | — |
+
+- **status 多两个字段**：`text_count`（跳到未索引的非帧文本行）、`untimed_count`（无时间戳帧行）。完成文案会直说原因：
+  - `帧数=0 且 text_count>0` → "该文件不含 7E 帧，帧索引基本不适用（请用模块日志或离线抽取脚本）"；
+  - 帧+文本混排 → 只报"另有 N 条非帧文本记录未入索引"，**不会**误报"不适用"。
+- **CCO 模块日志不要指望帧索引**：它是文本日志（1.25 M 行也常见），即使能被识别也只会得到 `帧数≈0 + text_count≈行数`。按关键字/时间窗翻这类日志用离线脚本或 `grep`，比任何工作台内改动都快（本项目已有 `cco_log_extract.py` 样例：1.25 M 行 14 s）。
+- 2 字节退化帧（文本里零散的 `fseq:7e,sseq:7e`）**不入库**，避免污染帧计数与网络评估分母。
+
 > 来源：ai-control-plane/references/listener.md；ai-control-plane/references/api-contract.md；ai-control-plane/references/operation-guide.md
 
 ## 3. 已解析帧查询与通信流追踪
@@ -245,6 +263,10 @@ UNASSOC ──关联确认成功──► ONNET ──第1个心跳周期无心�
 - `none` 时 `/api/parse`（8765）返回 503，**不影响**串口采集与日志索引。
 - **起网关（Windows 侧，需人在 Windows 执行）**：桌面 `wsl环境部署.bat` → [4] 启动 / [5] 停止；或 `powershell -File <WORKBENCH_ROOT>/tools/scripts/uart-map.ps1 -Action start-gateway`（详见 `<WORKBENCH_ROOT>/tools/scripts/README.md`）。WSL/Linux 侧无此步骤。
 - **排查提示**：帧缺协议明细时先看 `parse_backend`；`none` → 先起网关再继续，别怀疑数据/链路；窄带（双模 HPLC/RF）报文的深度字段同样依赖该档位，Linux 侧无法自足。
+- **`none` 档也能拿到四列**（2026-11 起）：`flow_dir` / `app_id` / `meter_addrs` / `sta_tei` 由纯 Python 解码兜底物化（复用 `adapter_dualmac` + `trace_extract`），所以 **`none` 下 trace 回放、按方向/表地址/任务号聚合可用**。
+  - 仍然缺的是 DLL 专有字段：`frm_type`、`Detail`（APP_RAW 之外的深度解析）、`ack_peer`（ACK 识别依赖 `FrmType`）。
+  - **判读红线**：`none` 下 `network_assessment` 可能输出 `overall_health:"healthy"` 而 `avg_success_rate/beacon_period_ms` 为 `null`、`scan_method:"undetected"` —— **先看 null，再看评级**，别把"字段没喂进来"当成"链路健康"。
+  - 旧索引不会自动补列：改档位/升级后要么重建索引，要么按 `ai-control-plane/references/offline-analysis.md` 的口径只读 SQL 复核，不要手改 `idx-*.sqlite3`。
 
 > 来源：ai-control-plane/references/listener.md；ai-control-plane/references/operation-guide.md；ai-control-plane/references/api-contract.md
 

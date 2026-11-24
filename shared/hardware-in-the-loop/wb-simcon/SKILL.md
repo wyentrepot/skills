@@ -108,7 +108,7 @@ metadata:
 
 ## 3. 跑验证任务（异步，不可取消）
 
-**先分叉**：**无 token**（本机 `local_full` 免 token，AI 不自签授权）→ v2 `verification-runs`；
+**先分叉**：**无 token**（本机 `local_full` 免 token；需要 token 时，用户授权后 AI 可自签最小权限 grant）→ v2 `verification-runs`；
 **有 token**（人已签发）→ v1 `simcon/verify`。两条路跑的是同一套 simcon 验证，只是门面不同。
 
 ```bash

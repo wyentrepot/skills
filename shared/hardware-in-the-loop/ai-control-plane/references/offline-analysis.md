@@ -70,6 +70,10 @@ ls .build_plain/apps/listener/runtime/indexes/idx-*.sqlite3   # 按索引（每�
 | `meter_addrs` / `sta_tei` | 电表地址集合 / STA TEI |
 | `flow_dir` / `ack_peer` | 收发方向 / ACK 对端 |
 
+> 2026-11 起：`flow_dir` / `app_id` / `msg_seq` / `meter_addrs` / `sta_tei` 在
+> `parse_backend=none`（无 DLL）时也由纯 Python 兜底物化；`frm_type` / `ack_peer`
+> 仍依赖 DLL，`none` 下为空是**预期**、不是数据丢。旧索引不会自动补列，需重建。
+
 ### minute_reports 表（分钟采集分析）
 
 | 列 | 含义 |

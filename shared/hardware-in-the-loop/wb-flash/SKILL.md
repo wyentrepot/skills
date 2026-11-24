@@ -11,14 +11,42 @@ metadata:
 
 # 烧录子技能（wb-flash）
 
+## 0. 主路径：一条命令（2026-11-18 起）
+
+授权白名单已配置（grant `firmware_roots` 或启动 `WORKBENCH_AI_FIRMWARE_ROOTS`）时，**整条烧录链一条命令完成，AI 拿 JSON 转述即可**：
+
+```bash
+../wb-base/scripts/wb.py flash run --bin <iap绝对路径> --mapping sta-main
+# 编译产物自动化（推荐）：--latest 读工程根 latest_flash.json（firmware-version-build 编译后自动生成）
+../wb-base/scripts/wb.py flash run --latest /home/H_STA/01/sta --mapping sta-main
+```
+
+返回单个 JSON：`verdict`（`flash_ok` / `flash_unverified` / `flash_failed` / `preflight_failed` / `ensure_failed` / `submit_failed` / `rejected` / `timeout`）、版本横幅 + 件名比对（可比/命中/横幅无对应字段）、`job_id`、`duration_seconds`、`evidence_dir`（判定 README + 证据自动落盘）、`session_log`、`audit`（放行来源核验）；失败时含 `attribution` 与**固化处置提示**。幂等安全：同件重提交同键——服务端回放既有 job（`idempotent_replay: true`）**不会二次烧录**；**确要认真重烧同一件（如复测烧录链）→ `--new-key`**。会话用完自动释放（409 时 force 兜底）。
+
+**下文 §1–§6 是分步契约与判定口径**：脚本异常时按步下钻用；判定表与证据清单已固化进 run，保留作为口径依据。
+
 **本技能只讲一件事：用工作台 HTTP 面把 `iap_*.bin` 烧进 STA/CCO，并用会话日志判定成功。**
 别的事不归我：模拟电表/对档联调 → `wb-simeter`；串口会话、串口桥 preflight 细节、观察取证 → `wb-serial`；离线帧解析/构帧 → `wb-appframe`；侦听台查帧 → `wb-listener`；授权签发与 v2 任务门面 → `ai-control-plane`（只读总入口）。下文只留烧录必需的最小判据，别处不重复。
 
-## 1. 前置三查（缺一项就别提交）
+## 1. 前置三查（⚠️ run 已内置固化——AI 日常勿单独执行本节，仅 `wb flash run` 报错需要下钻时才读）
+
+> `wb flash run` 内部已按本节判据做件核验/preflight/授权，并自动：等横幅（BURN SUCCESS 后设备重启打横幅有滞后）→ 仍缺则同会话空行自证+reboot 补采 → 判定 → 证据落盘 → 释放串口。AI 的全部动作 = 跑 run + 转述 JSON。以下内容仅供人读与脚本异常排查。
+
+### 查 0 · 先用宿主控制面确认口归属（2026-11-17 起，30 秒）
+
+```bash
+HOST=$(ip route show default | awk '{print $3}'); TOKEN=$(cat /mnt/c/Users/*/.wsl-control/token | tr -d '\r\n')
+curl -s -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports | python3 -m json.tool | grep -A2 '"id": "sta-main"'
+```
+
+- 目标口要 `owner=serial-bridge` 且 `bridge.client_connected=true` 才能烧；`free` 说明桥没接管（先 `services/bridge/start`），
+  `fc-diag` 说明被诊断服务占着（COM8 场景）。
+- 桥要整体停/起：`POST /api/v1/services/bridge/{start|stop|restart}`；单口让出：`/api/v1/ports/<id>/disable`。
+- 看板 `http://127.0.0.1:8766/` 上能直接点，接口同源。
 
 ### 查 1 · 授权必须带 `firmware_roots`
 ```bash
-# 授权归人：AI 不自签、不扩权；仅限 workbench 本机 127.0.0.1 + admin key
+# 对话授权后 AI 可自签最小权限 grant（本机 127.0.0.1 + admin key）；不扩权、不转交
 curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
   -H "X-Workbench-Admin-Key: <WORKBENCH_AI_ADMIN_KEY>" -H "Content-Type: application/json" \
   -d '{"scopes":["module_session:ensure","module_flash:execute","evidence:read"],"resources":["*"],
@@ -29,7 +57,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
 - **白名单有两个来源（2026-10-28 `d5719b7` 起 v1/v2 统一）**：① 授权里的 `firmware_roots` 优先；② 空则回退启动时的环境变量 `WORKBENCH_AI_FIRMWARE_ROOTS`（多目录用路径分隔符）；③ 两者都空 → 403「当前授权未配置允许烧录目录」；④ 路径不在任一 root 内 → 403「固件路径不在当前授权的允许目录内」。
 - **`local_full`（本机 loopback 免 token）下 `grant` 为空**，白名单会由 env 顶上 —— 所以"免凭证也能烧"的前提是**启动时配了 env 白名单**；没配就 403。这不是"不校验"，是"来源换了"（修前才是真的没校验，`d5719b7` 已收口）。
 - **放行会留审计**：成功的放行会写一条 `store.audit(action="flash.authorization")`，含 `authorization_source`（`grant` / `env` / `local_full_env`）、`bin_path`、命中的 root、`operation_id`。要回答"这次烧录凭什么被允许"，查这条。注意：**审计条数 ≠ 烧录次数**（每次放行都记一次，同键重提也算一次放行）。
-- **团队红线不变**：烧录必须由人授权；不许因为"env 能顶"就跳过查 1，也不许靠重启工作台塞 env 给自己开白名单。
+- **红线**：烧录必须先有用户明确授权；有授权后 AI 可自签带 `firmware_roots` 的 grant 再烧；不许靠重启工作台塞 env 给自己开白名单（那条路没有 `flash.authorization` 审计）。
 
 > 来源：ai-control-plane/references/auth.md、ai-control-plane/references/module-serial.md、交接-20261028.md
 > 来源：validation-20261028/F5（T4 实机：未签发授权、无 `firmware_roots`，v2 `local_full` 未返 403 即烧成）
@@ -59,6 +87,8 @@ curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
 > 来源：ai-control-plane/references/module-serial.md；交接-20261028.md
 
 ## 2. 提交烧录
+
+**首选执行层**：`../wb-base/scripts/wb.py`——`wb flash submit <bin>`（自动 ensure 会话、只认 iap 件、md5 幂等键防二次烧录、403 按授权来源解释）+ `wb wait <job_id>`（等终态 + 失败自动归因）。下文 curl 序列为契约参考与兜底。
 
 先拿 `session_id`（`ms-xxxx`）：v2 `module-actions`(action=ensure) 或 v1 `module-sessions/ensure` `{"module":"sta","mapping_id":"sta-main"}`；409=串口占用（物理独占，非 bug）。然后：
 
@@ -133,11 +163,24 @@ module_serial_service.py:389  if self._flash_state["flashing"]: raise   ← 只�
 
 > 来源：REQS.md；apps/workbench/ai_capability_service.py；apps/module_log/module_serial_service.py；evidence/run/flash-cco-20261027-2144/README.md；evidence/run/flash-sta-20261028/README.md
 
+### 坑 4 · `Bootloader prompt was not detected`：先自证口性再定性，别凭一次失败下结论（2026-11-17/18 两次实测）
+
+现象：提交成功、会话也开起来了，但 flash job 立刻失败 `Bootloader prompt was not detected.`。
+
+判据（看 `module-serial/sessions/<id>/logs`）：
+
+- 发 `reboot` 后**只有运行日志**（`mac_recv_task.c` / `phy_hplc.c` / `rx beacon`）、时间戳连续不断档、无 boot 响应 → 这次没唤醒 shell；
+- **同口同件一次失败≠口废**（2026-11-18 实证）：COM18（sta-main）10:19 失败（TX 空行后无 `[node /]$` 提示符，reboot 打进哑口），10:35 重试**成功**——空行 0.4s 出提示符 → reboot 有回显 → 0.6s 出 Unicorn Bootloader → 狂发 `d` 进 bootloader。正确姿势：**先发空行自证 shell 活着（有提示符回显）再发 reboot**，无回显时可再试空行/稍候重试，别急着定性"纯日志口"；
+- 对照组：老板 sta-main=COM9，`reboot` 立刻回 `[image /]#`。
+
+处置：空行+reboot 自证 → 有回显走正常烧录；多次自证仍哑 → 换真正的控制台口或做**上电/复位窗口**（本桥无 DTR/RTS，不能用 DTR 复位），或走工装。
+不要反复重提 flash job（见坑 3），也不要换成 `flash_*.bin` 试。
+
 ## 5. 判定表（BURN SUCCESS 怎么认）
 | # | 判据 | 合格值（实测样例） |
 | --- | --- | --- |
 | 1 | 会话日志事件行 | `[EVENT] 烧录完成：BURN SUCCESS`（工装写的，最硬） |
-| 2 | 包数与字节数 | `packet=478/478 bytes=489288/489288`（CCO）、`368/368`+`375900/375900`（STA），pct=100，**全等** |
+| 2 | 包数与字节数 | `packet=478/478 bytes=489288/489288`（CCO）、`368/368`+`375900/375900`（STA）——**样例数值随件变，包数以日志/job 信封 total 为准**，字节数与 `md5sum` 计的件大小全等即可（pct=100） |
 | 3 | 收尾握手 | `XMODEM EOT ACK` + `Image download OK!` |
 | 4 | 烧后横幅 | STA `isv:060088 / sver:002732 / hver:0101 / isv date:2026-10-27`；CCO `fc sversion : 090028` |
 | 5 | 件名**部分**比对 | 横幅实出 **6 行**（`boot_ver` / `sdk_ver` / `hver` / `sver` / `isv` / `isv date`），件名 `hv0101_sv002732_isv060088_idate261027` 只有 **4 项可比**：`hv0101→hver`、`sv002732→sver`、`isv060088→isv`、`idate261027→isv date`；**`date261027` 与 `FC_F8` 在横幅里没有对应字段，不可比**（CCO 另证 `isv 090017→090028`，21:46:47 与 21:58:57 两次独立采样） |

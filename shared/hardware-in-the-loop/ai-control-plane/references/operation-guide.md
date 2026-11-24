@@ -88,18 +88,18 @@ operation/Artifact、侦听台深链帧、或维护旧客户端时才使用 v1�
 ## 2. 前置：启动与配置
 
 1. 启动 workbench（`启动工具.bat` 菜单 6，或 `apps/workbench/启动工作台.bat`），默认端口 8790。
-2. **配置人工授权管理密钥（可选但推荐）**：启动前设环境变量，否则 admin 授权接口返回 `503 未配置人工授权管理密钥`：
+2. **配置授权管理密钥（AI 自签 grant 时需要；页面操作不需要）**：启动前设环境变量，否则 admin 授权接口返回 `503 未配置人工授权管理密钥`：
 
    ```bat
    :: 在 apps/workbench/启动工作台.bat 顶部加，或启动前 set
    set "WORKBENCH_AI_ADMIN_KEY=your-secret"
    ```
 
-   > 当前项目仓库未内置该密钥（安全考虑），首次使用需自行设置并**妥善保管**。日常人工点页面不需要它，只有「AI 自动拿授权」才需要。
+   > 当前项目仓库未内置该密钥（安全考虑），首次使用需自行设置并**妥善保管**。页面操作不需要它；AI 在用户授权后自签 grant 时才需要。
 
 ## 3. 授权流程（先拿 token，再调能力）
 
-### 3.1 管理员发授权
+### 3.1 授权签发（对话授权后 AI 可自执行）
 
 ```bash
 curl -X POST http://127.0.0.1:8790/api/ai/v1/admin/grants \
@@ -488,7 +488,7 @@ curl http://127.0.0.1:8790/api/ai/v1/status -H "Authorization: Bearer <token>"
 
 ## 13. v1 专家调用流程（兼容 checklist）
 
-1. `POST /admin/grants` 拿 token（人来做，一次性）。
+1. `POST /admin/grants` 拿 token（对话授权后 AI 可自签，一次性）。
 2. `GET /status` 确认后端就绪、串口在线。
 3. `POST /module-sessions/ensure` 确保模块会话。
 4. `POST /flash-operations` 烧录 → `wait` 到 `succeeded`。

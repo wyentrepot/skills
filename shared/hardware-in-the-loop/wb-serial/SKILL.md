@@ -17,6 +17,13 @@ metadata:
 
 **顺序不可颠倒、不可跳过**：工作台串口默认走纯 Python 桥（Windows `serial_bridge.py windows` ↔ TCP ↔ WSL `serial_bridge.py wsl`）。源文档的硬性要求是：**桥不通时不要继续 ensure / open / verify**——否则要么白开一次，要么把物理口占住，后面谁都用不了。
 
+> 执行层首选：`../wb-base/scripts/wb.py preflight <mapping_id>`（本节判定已固化：只验目标口、`usable` 过线、`in_use` 不阻塞、附 8766 owner/conflict）。下文 curl 为契约参考与兜底。
+
+> **先看宿主控制面**（2026-11-17 起）：`GET http://<宿主IP>:8766/api/v1/ports` 一次给全每口的
+> COM、归属（`serial-bridge`/`fc-diag`/`free`/`absent`/`disabled`）与通道状态；桥没起就
+> `POST /api/v1/services/bridge/start`，要让口给 Windows 工具用 `POST /api/v1/ports/<id>/disable`。
+> **不要**再手动 `wsl stop`、不要猜 COM 号。接入与令牌见 wb-base §1.4。
+
 ```bash
 curl -s http://127.0.0.1:8790/api/serial-bridge/status | python3 -m json.tool
 curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
@@ -35,6 +42,22 @@ curl -s -X POST http://127.0.0.1:8790/api/serial-bridge/verify \
 - verify 的 `open` 参数：`{"ports":["simcon"],"open":true}` 可只验指定口；`open=false` 跳过打开检查（`GET` / `POST` 同一响应形状，`POST` 才带 body；`status` 只读、不打开串口）。
 
 > 来源：validation-20261028/F1（T1 实机：`factory` COM7 未接 → 全局 `ok=false`，`cco-main` 的 `workbench_ready=true`；`cco-main` 被占时 `open_ok=null`+`in_use=true`+`ok=true`）
+
+### 1.0 让口 / 接管（跨域抢同一个 COM 时用，2026-11-17 起）
+
+一个物理口同一时刻只有一个持有者：串口桥、诊断服务 8765、厂商工具（Start.exe/MaintenanceKits/BurnTool）、
+直连脚本（如 `ecu698`）都可能占着。**不要手动 `wsl stop`、不要猜 COM 号**，走宿主控制面：
+
+```bash
+HOST=$(ip route show default | awk '{print $3}'); TOKEN=$(cat /mnt/c/Users/*/.wsl-control/token | tr -d '\r\n')
+curl -s -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports        # 看 owner：serial-bridge/fc-diag/free/absent/disabled
+curl -s -X POST -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports/<id>/disable   # 释放（重启 Windows 桥 5–15s）
+curl -s -X POST -H "X-Host-Token: $TOKEN" http://$HOST:8766/api/v1/ports/<id>/enable    # 用完接管回来
+```
+
+- 让 **COM8** 给 BurnTool / 8765 之外的用法 → 停诊断服务：`POST /api/v1/services/diag/stop`。
+- 让 **ECU 口（COM28/COM29）** 给 `ecu698` 直连 → `POST /api/v1/ports/ecu-mgmt/disable`。
+- 判"能不能开"仍以 `ports[].owner` + `bridge.client_connected` 为准；`absent` = 系统串口表里没有这个口。
 
 ### 1.1 为什么必须做（三层机制，不讲原理就会反复踩）
 
@@ -107,7 +130,7 @@ curl -X POST http://127.0.0.1:8790/api/ai/v1/module-sessions/<session_id>/stop \
   -d '{"force": false}'
 ```
 
-- `409` + `"会话仍有活动观察任务，不能停止"`：会话有活跃依赖（**如观察任务**）时普通 stop 拒绝。先查是哪个观察：`GET /api/ai/v1/operations?...`（要 token）或直读 `<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json` 里该会话的 op；能等就等它到终态，要撤就 `POST /api/ai/v1/operations/{id}/cancel`（`observation:create`），确认放弃才 `{"force":true}`。
+- `409` + `"会话仍有活动观察任务，不能停止"`：会话有活跃依赖（**如观察任务**）时普通 stop 拒绝。先查是哪个观察：`GET /api/ai/v1/operations?...`（要 token）或直读 `<WORKBENCH_ROOT>/apps/workbench/runtime/ai-control/operations.json` 里该会话的 op；能等就等它到终态，要撤就 `POST /api/ai/v1/operations/{id}/cancel`（`observation:create`），确认放弃才 `{"force":true}`。**注意（2026-11-18 实测）：挡路的可能是历史观察残留**——operations.json 里该会话全是终态/零活动观察，普通 stop 仍 409；此时直接 `{"force":true}` 放行有多次先例（11-17 两次、11-18 一次），不必反复排查。执行层：`../wb-base/scripts/wb.py session stop <session_id> [--force]`。
 - **stop 之后会话转 `idle`、不会消失**（`GET /api/module-serial/sessions` 仍看得到它）；释放判据是 verify 里该口 `in_use=false` + `open_ok=true`。
 - **v2 等价门面**（免 token，`local_full`）：`POST /api/ai/v2/module-actions`，action=`ensure`/`send`/`stop` → `202` + job → `GET /api/ai/v2/jobs/{id}`。实测：v2 stop job 可能停在 `waiting/running`（已知不收敛点），**以物理串口是否释放为准**，不要为等 job 终态把口一直占着。
 
@@ -279,11 +302,11 @@ curl -s http://127.0.0.1:8790/api/serial-tags               # 角色↔COM 标�
 | 旧做法 | 状态 | 现在怎么做 |
 | --- | --- | --- |
 | **usbipd attach** 把 COM 映射进 WSL，再按 `/dev/ttyACM*` / `/dev/ttyUSB*` 找口 | **已弃用（2026-10-22 起）** | 走 Python 串口桥；`serial_ports.json` 的 `usb_busid` 已清空，映射改指 `/run/hplc/serial/*` |
-| 用 `config/serial_ports.json.usbipd-backup-20261022.json` 恢复 usbipd 映射 | **不要单独做** | 要么保持 usbipd detached，要么恢复备份**并停 WSL 桥**，二者不能并存 |
+| 用 `config/serial_ports.json.usbipd-backup-20261022.json` 恢复 usbipd 映射 | **禁止（2026-11-17 起 usbipd 已整体移除）** | 保持桥方案；该备份仅作历史留档 |
 | PTY 侧写 `parity:"E"`（把真实偶校验配在 WSL 侧） | **已弃用** | 映射 `parity` 恒 `N`，真实 E/O 在 Windows 侧 `config/serial_bridge.json` |
 | 在会话里硬编码 COM 号（`"port":"COM9"`） | **已弃用** | 用 `mapping_id`（`cco-main`/`sta-main`/`simcon`/`listener`） |
 | 用桥配置默认 115200 覆盖业务 baud | **禁止** | verify 按 `serial_ports.json` 映射 baud 打开；业务 baud 由 CCO 落点决定 |
-| 旧版 `uart-map.ps1` / 卡在 Hyper-V 防火墙检查的脚本 | **已弃用** | 用新版 `uart-map.ps1 -Action bridge-toggle\|bridge-start\|bridge-stop\|bridge-status`；菜单 [6]/[7] 一键启停与查状态，[3] 的 usbipd 视图有 3 秒超时 |
+| 旧版 `uart-map.ps1` / 卡在 Hyper-V 防火墙检查的脚本 | **已弃用** | 走宿主控制面 `POST http://<宿主IP>:8766/api/v1/services/bridge/{start\|stop\|restart}`（看板 `http://127.0.0.1:8766/`）；人机菜单见 `tools/win_host/uart-map.ps1`（已无 usbipd 项） |
 | 从 WSL 的 UNC 当前目录 `cmd start` 起 Windows 桥 | **禁止** | 复制到 Windows 本地目录后用 `pythonw.exe` 常驻（会话级 `python.exe` 只适合调试） |
 
 > 来源：ai-control-plane/references/serial-bridge.md、ai-control-plane/references/module-serial.md
