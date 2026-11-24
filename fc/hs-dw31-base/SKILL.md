@@ -84,6 +84,15 @@ $CTL topo
 
 升级与 NV 操作不要凭记忆：操作步骤在 `hs-dw31-upg` / `hs-dw31-nv`，判据细节读 `$BASE/references/contract.md`。
 
+**烧录不要自己分步**：一条命令出结果 JSON（工程路径 + 包文件即可，回连后自动同步 prim XML）：
+
+```bash
+python3 <skill 根>/hs-dw31-upg/scripts/flash.py --project <工程根> --file <包文件>
+```
+
+**日志打不出来不要重查**：`hs-dw31-diag` → `references/logs.md` **§8** 已有定因（`0x5310` 模块开关）。
+**在 `Application/` 层新写日志要中文注释**：同 §8.4.1（XML 不会自动出条目，按 id 公式手补 `mss_prim_db.xml`）。
+
 ## 6. 本技能内的文档（唯一来源）
 
 - `references/contract.md`：服务端点、错误码、烧录门禁与状态机、`0x3410` 布局、成功判据、字段字典、禁止项、8766 控制面。

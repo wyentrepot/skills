@@ -2,6 +2,9 @@
 
 适用：给海思 DW31 模块做升级包 prepare、commit、查看进度/结果、判定成功/失败、必要时 stop。
 
+> **默认不要照本文手工分步走**：常规烧录用 `scripts/flash.py` 一条命令拿 JSON（见 `SKILL.md` §1）。
+> 本文用于出问题时的判据、字段含义、异常处置与救援。
+
 **授权口径（2026-11-16 用户定，取代此前"只能网页点"）**：
 - **不需要网页点击**。用户在对话中明确说"允许 / 可以烧 / 直接升"即为批准（`contract.md` §3.1 对话级授权）。
 - AI 调 `POST /api/upg/commit` 必须带全：`approval_id`、`human_confirmed: true`、`approved_by`（`cli` / `mcp` / `ai`）、`user_approval`（用户原话摘要）。

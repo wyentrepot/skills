@@ -82,5 +82,7 @@ git -C "$PROJECT" submodule status Platform/plc-sdk
 | 编译报 SDK 文件冲突 | 工作区有未提交改动或子模块指针不对；按工程规则备份→核对，**不要** clean 掉用户改动 |
 | 版本串没变 | 用的是 `sg_cco` 目标（不注入 ECU 版本），或没带 `ECU_VERSION` |
 | 升级包被模块拒（0x8007） | 烧了 CCO 族包；换 `out/sg_fusion_cco/…upg.bin` |
+| 没编 ECU 的 `sg_cco`，XML 里却有 ECU 日志条目 | `out/DW31v100/build/mak_database/xml/base/<core>/*.cfg` 是上一轮构建残留，step2 会照扫；`build.sh` 已在 `prepare_bridge` 里清理（2026-11-18） |
+| 日志条目 ID 与固件对不上 | 日志 id 的十六进制不能含 A–F（生成器只截尾十进制数字），见 `hs-dw31-diag/references/logs.md` §8.4.1 |
 | 想整包烧（板子起不来） | 用 `image/…_image.fwpkg` + BurnTool；**先停 8765 释放串口** |
 | 构建产物被 `make clean` 清掉 | 海思 GW 用 `scripts/build.sh clean`，只清 SDK 输出；不要跑模块工程的 `make clean` |

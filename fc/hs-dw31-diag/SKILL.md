@@ -23,6 +23,8 @@ metadata:
 | 任务 | 只读这一个 |
 |---|---|
 | 抓日志：状态、帧、日志帧、prim 行与结构树 | `references/logs.md` |
+| **日志打不出来 / 只有网络层能打 / 显示 `(未知 msg_id)`** | `references/logs.md` **§8**（已定因：`0x5310` 模块开关 + prim DB）——直接照 §8.3 发口令，不要重查 |
+| **在 `Application/` 层新写日志**（要中文注释） | `references/logs.md` **§8.4.1**：XML 不会自动生成条目，按公式手补 `MSG_LOG` 行 |
 | 原始诊断命令 | `references/raw.md` |
 | 拓扑 | `references/topology.md` |
 | 服务端点、字段判据、错误码、8766 控制面 | `$BASE/references/contract.md`、`$BASE/references/errors.md` |

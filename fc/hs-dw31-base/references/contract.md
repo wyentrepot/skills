@@ -92,7 +92,8 @@ CURL=/mnt/c/Windows/System32/curl.exe
 |---|---|
 | `nv-read` 返回 `rc=0` 但 `item=null`、`decoded=null` | 宿主 NV 目录没有该 key（不是 NV 写坏） |
 | `nv-list` 项数与固件不符（如新增项查不到） | 同上，需重新加载 NV 目录 |
-| 模块日志只有结构化 prim 能解析、自己打的字符串日志看不到 | 日志 prim 未定义，或该日志走的不是帧通道 |
+| 自己打的日志 `0x5314` 里根本没有该 msg_id | **设备侧上报开关没开该 module_id**（`0x5310`），记录压根没上串口 |
+| `0x5314` 里有该 msg_id，但显示 `[0x..] (未知 msg_id)` | 宿主 prim 库没有这个 id（id 未随构建生成，或改过 id 没 `prim/reload`） |
 
 需要跟进的产物位于构建输出的 `system/` 下：`hdbcfg/mss_prim_db.xml`（prim 库）、`hdbcfg/mss_nvi_db.xml`（NV 目录）、`diag/*_msg_struct_def.txt`（结构定义）、`nv/nv_app_struct_def.txt`（NV 结构）。
 
@@ -113,6 +114,14 @@ CURL=/mnt/c/Windows/System32/curl.exe
 >
 > 判读：只做 1) 不做 2)，`nv-read` 能出 `item.name`/`structure` 但 `decoded.fields` 为空；只重启不同步，仍是旧的 96 项。
 > 另注：`mss_nvi_db.xml` 里的 `ID` 是**十进制**（`ID="1108"` = `0x454`），用十六进制 grep 会误判"没生成"。
+
+**日志通道（2026-11-18 实测定因，细节见 `hs-dw31-diag` → `references/logs.md` §8）**
+
+- 日志三层：①设备 `0x5310` 模块上报开关（记录出不出串口）→ ②宿主 `mss_prim_db.xml`（msg_id 能否渲染文字）→ ③服务是否已加载该 XML（`prim/reload`）。
+- app / mrs 层日志的 module = `TD_MOD_ID_APP_COMMON` = **812 = `0x32C`**，**默认关**；MAC/PHY 用 `0x200`，厂商工具每次连上都会开它 → 所以"只有网络层能打"。
+- 开口令：`POST /api/send {"cmd_id":"0x5310","param_hex":"2c030001"}`（+ `2c030101` / 兜底 `ffff0001`）；**模块复位后必须重发**。
+- `0x5517` 级别开关**不需要**：INFO 级实测可过。
+- 升级脚本 `hs-dw31-upg/scripts/flash.py` 会在回连后**自动同步 prim XML**（优先 `/api/prim/upload`，回落 `/api/prim/reload`）。
 
 ## 3. 烧录门禁、状态机与模块状态
 
