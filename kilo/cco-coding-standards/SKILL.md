@@ -7,7 +7,7 @@ description: CCO/STA 嵌入式 C/C++ 编码规范（142 条规则）及代码修
 
 ## 使用方式
 
-加载此 skill 后，读取 `/home/rule/project-index/cco/coding-standards.mdc` 获取完整规范。
+加载此 skill 后，读取本技能目录下的 [`references/coding-standards.mdc`](references/coding-standards.mdc) 获取完整规范（142 条规则 + 代码修改约定，原文已内置于本技能）。
 
 ## 要点
 

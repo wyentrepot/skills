@@ -1,10 +1,11 @@
 ---
 name: sta-auto-status-json
-description: Use when the user pastes [STA-AUTO] status prints from the CCO firmware `sta_upgrade status` command (lines like mode=FORMAL ..., firmware=VALID ..., targets= ..., boot= ..., gate: ..., conditions: ...) or asks 这个打印什么状态 / STA 自主升级状态 / 这个日志什么状态. Run the bundled parser script and reply with its JSON result plus a short conclusion — never hand-parse these logs.
+description: "Use when the user pastes [STA-AUTO] status prints from the CCO firmware `sta_upgrade status` command (lines like mode=FORMAL ..., firmware=VALID ..., targets= ..., boot= ..., gate: ..., conditions: ...) or asks 这个打印什么状态 / STA 自主升级状态 / 这个日志什么状态. Run the bundled parser script and reply with its JSON result plus a short conclusion — never hand-parse these logs."
 metadata:
   author: cco
   version: "1.1.0"
   applies-to: /home/H_CCO/001/cco
+disable-model-invocation: true
 ---
 
 # sta-auto-status-json（STA 自主升级状态打印解析）
