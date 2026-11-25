@@ -1,0 +1,97 @@
+#!/bin/bash
+# glapi — 通过 Edge 无头浏览器访问公司 GitLab 的 REST API。
+#
+# 为什么需要它：git.friendcom.com (192.168.1.182) 的 443 只接受 Edge 的 TLS
+# 握手，curl / openssl / node fetch / python requests / curl_cffi 全部在握手
+# 阶段被服务端重置（unexpected eof / ECONNRESET）。Edge 无头模式能通，所以拿它
+# 当传输层：本地 helper 页面 file:// 打开，用 fetch 带 PRIVATE-TOKEN 打 API，
+# 把 <pre> 里的状态码和正文 dump 回来。
+#
+# 用法：
+#   glapi GET  /api/v4/user
+#   glapi GET  "/api/v4/projects/dual-mode-communication%2Fsta/issues/135/notes?sort=asc&per_page=100"
+#   glapi POST /api/v4/projects/dual-mode-communication%2Fsta/issues/135/notes '{"body":"hi"}'
+#   glapi PUT  /api/v4/projects/dual-mode-communication%2Fsta/issues/135 '{"labels":"bug"}'
+#
+# 约定：stdout = 响应正文（JSON 会格式化），stderr = "HTTP <code>"。
+# 退出码：0 正常，2 环境/参数问题，3 Edge 无输出，4 fetch 未完成，5 fetch 报错。
+# token 放在 $GLAPI_TOKEN_FILE（默认 /root/.dsh/gitlab-token，glpat-… , api scope）。
+
+set -uo pipefail
+
+TOKEN_FILE="${GLAPI_TOKEN_FILE:-/root/.dsh/gitlab-token}"
+ORIGIN="${GLAPI_ORIGIN:-https://192.168.1.182}"
+EDGE="/mnt/c/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+WINTMP="/mnt/c/Users/A24006872/AppData/Local/Temp"
+WINTMP_URL="file:///C:/Users/A24006872/AppData/Local/Temp"
+PROFILE='C:\Users\A24006872\AppData\Local\Temp\glapi-profile'
+BUDGET="${GLAPI_BUDGET:-9000}"
+
+METHOD="${1:-GET}"
+APIPATH="${2:?usage: glapi METHOD PATH [JSON_BODY]}"
+BODY="${3:-}"
+
+[ -r "$TOKEN_FILE" ] || { echo "glapi: token file not readable: $TOKEN_FILE" >&2; exit 2; }
+TOKEN="$(tr -d '[:space:]' < "$TOKEN_FILE")"
+[ -n "$TOKEN" ] || { echo "glapi: empty token in $TOKEN_FILE" >&2; exit 2; }
+[ -x "$EDGE" ] || { echo "glapi: Edge not found at $EDGE" >&2; exit 2; }
+
+NAME="glapi-$$"
+HTML_WIN="$WINTMP/$NAME.html"
+HTML_URL="$WINTMP_URL/$NAME.html"
+
+cat > "$HTML_WIN" <<'HTMLEOF'
+<!doctype html><meta charset="utf-8"><pre id="out">PENDING</pre>
+<script>
+const q = new URLSearchParams(location.search);
+const token = atob(q.get('t') || '');
+const b64 = q.get('b');
+const body = b64 ? atob(b64) : null;
+const headers = { 'PRIVATE-TOKEN': token };
+if (body !== null) headers['Content-Type'] = 'application/json';
+fetch(q.get('o') + q.get('p'), {
+  method: q.get('m') || 'GET',
+  headers,
+  body: body === null ? undefined : body
+}).then(async (r) => {
+  document.getElementById('out').textContent = 'STATUS:' + r.status + '\n' + (await r.text());
+}).catch((e) => {
+  document.getElementById('out').textContent = 'FETCHERR:' + e.message;
+});
+</script>
+HTMLEOF
+
+urlenc() { python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1],safe=""),end="")' "$1"; }
+b64() { printf '%s' "$1" | base64 -w0; }
+
+QUERY="t=$(urlenc "$(b64 "$TOKEN")")&m=$(urlenc "$METHOD")&p=$(urlenc "$APIPATH")&o=$(urlenc "$ORIGIN")&n=$(date +%s%N)"
+if [ -n "$BODY" ]; then
+  QUERY="t=$(urlenc "$(b64 "$TOKEN")")&m=$(urlenc "$METHOD")&p=$(urlenc "$APIPATH")&o=$(urlenc "$ORIGIN")&b=$(urlenc "$(b64 "$BODY")")&n=$(date +%s%N)"
+fi
+
+RAW="$("$EDGE" --headless=new --disable-gpu --no-sandbox --ignore-certificate-errors \
+  --no-proxy-server --user-data-dir="$PROFILE" --virtual-time-budget="$BUDGET" --dump-dom \
+  "$HTML_URL?$QUERY" 2>/dev/null)"
+rm -f "$HTML_WIN"
+
+python3 - "$RAW" <<'PY'
+import sys, re, html, json
+raw = sys.argv[1] if len(sys.argv) > 1 else ''
+m = re.search(r'<pre id="out">(.*?)</pre>', raw, re.S)
+if not m:
+    sys.stderr.write('HTTP -\n')
+    sys.stdout.write(raw[:2000] or 'glapi: no output from edge')
+    raise SystemExit(3)
+text = html.unescape(m.group(1))
+if text.startswith('PENDING'):
+    sys.stderr.write('HTTP -\n'); sys.stdout.write('glapi: helper did not finish (fetch still pending)'); raise SystemExit(4)
+if text.startswith('FETCHERR:'):
+    sys.stderr.write('HTTP 0\n'); sys.stdout.write(text[len('FETCHERR:'):]); raise SystemExit(5)
+status, _, body = text.partition('\n')
+code = status.split(':', 1)[1] if ':' in status else '-'
+sys.stderr.write('HTTP %s\n' % code)
+try:
+    sys.stdout.write(json.dumps(json.loads(body), ensure_ascii=False, indent=2))
+except Exception:
+    sys.stdout.write(body)
+PY
